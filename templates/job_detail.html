@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nexscrow — Job</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <nav class="nav">
+    <a class="brand" href="/">nex<span>crow</span></a>
+    <div class="nav-right">
+      <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
+        {{ 'DEMO MODE — simulated money' if view.constraints.demo_mode else 'LIVE MODE' }}
+      </span>
+      <a href="/dashboard">Board →</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <section class="panel" id="job-header" data-job-id="{{ job_id }}"></section>
+
+    <section class="cols">
+      <div class="col-main">
+        <section class="panel">
+          <h2>Escrow timeline</h2>
+          <p class="hint">Every step recorded on the public ledger — funds only move on verified proof.</p>
+          <div id="timeline" class="tl"></div>
+        </section>
+
+        <section class="panel">
+          <h2>Deliverable — the proof of work</h2>
+          <div id="deliverable" class="md"></div>
+        </section>
+      </div>
+
+      <div class="col-side">
+        <section class="panel side" id="money"></section>
+
+        <section class="panel side">
+          <h2>Verify the proof yourself</h2>
+          <p class="hint">Recomputes the SHA-256 of the deliverable in your browser and compares it to the hash the agent submitted. No server involved.</p>
+          <div class="kv">
+            <div><span class="k">proof_hash</span><span class="v mono" id="proof-hash"></span></div>
+          </div>
+          <button id="verify-btn" class="btn primary" style="margin-top:12px">Verify in my browser</button>
+          <div id="verify-result" class="result hidden"></div>
+        </section>
+
+        <section class="panel side">
+          <h2>Share this job</h2>
+          <button id="copy-link" class="btn ghost">Copy link</button>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <footer class="wrap footer">nexscrow · lock money · hire agents · release only on proof</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

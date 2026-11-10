@@ -125,3 +125,14 @@ def test_config_reports_auth_capabilities(tmp_path):
     auth = c.get("/api/config").json()["auth"]
     assert auth["google_configured"] is False
     assert auth["near_network"] == "mainnet"
+
+
+def test_job_detail_page(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    job_id = post_job(c, "Detail page", 2.0)
+    r = c.get(f"/job/{job_id}")
+    assert r.status_code == 200
+    assert job_id in r.text
+    # unknown job -> 404
+    assert c.get("/job/doesnotexist").status_code == 404

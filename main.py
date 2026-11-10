@@ -121,6 +121,18 @@ def create_app(
             context={"view": system.public_view()},
         )
 
+    @app.get("/job/{job_id}")
+    async def job_page(request: Request, job_id: str):
+        try:
+            system.jobs.get(job_id)
+        except JobNotFound:
+            raise HTTPException(status_code=404, detail="job not found")
+        return templates.TemplateResponse(
+            request=request,
+            name="job_detail.html",
+            context={"view": system.public_view(), "job_id": job_id},
+        )
+
     @app.get("/near-callback")
     async def near_callback(request: Request):
         return templates.TemplateResponse(

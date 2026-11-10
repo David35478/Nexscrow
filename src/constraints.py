@@ -26,6 +26,9 @@ class Constraints:
         self.min_proof_length = int(raw.get("min_proof_length", 200))
         self.protocol_fee_percent = float(raw.get("protocol_fee_percent", 2.0))
         self.job_timeout_minutes = int(raw.get("job_timeout_minutes", 60))
+        self.default_dispute_window_minutes = int(
+            raw.get("default_dispute_window_minutes", 30)
+        )
         self.intents = dict(raw.get("intents", {}))
         self.work_engine = str(raw.get("work_engine", "demo")).lower()
         self.near_ai = dict(raw.get("near_ai", {}))
@@ -42,6 +45,7 @@ class Constraints:
             "min_proof_length": self.min_proof_length,
             "protocol_fee_percent": self.protocol_fee_percent,
             "job_timeout_minutes": self.job_timeout_minutes,
+            "default_dispute_window_minutes": self.default_dispute_window_minutes,
             "work_engine": self.work_engine,
         }
 

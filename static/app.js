@@ -253,7 +253,9 @@ if (statsEl) {
     const openActions = (j) =>
       pending(j)
         ? `<button class="btn small primary" data-act="approve">Approve deposit ($${fmt(j.reward_usd)})</button>`
-        : `<button class="btn small primary" data-act="agent-run" ${j.payment_status !== "locked" ? "disabled" : ""}>Agent accepts &amp; delivers</button>`;
+        : (j.bids || []).length
+          ? (j.bids || []).map((b) => `<span class="bid-tag">${escapeHtml(b.agent_id)}: $${fmt(b.amount_usd)}${j.selected_bid && j.selected_bid.agent_id === b.agent_id ? " ✓ awarded" : ""}</span>`).join(" ")
+          : `<button class="btn small primary" data-act="agent-run" ${j.payment_status !== "locked" ? "disabled" : ""}>Agent accepts &amp; delivers</button>`;
     render($("#open-jobs"), board.open_jobs, openActions);
     render($("#active-jobs"), board.active_jobs, () =>
       `<button class="btn small primary" data-act="agent-run">Continue → proof &amp; release</button>`);
@@ -276,7 +278,17 @@ if (statsEl) {
   }
 
   async function refreshAll() {
-    await Promise.all([loadBoard(), loadLedger(), loadConfig()]);
+    await Promise.all([loadBoard(), loadLedger(), loadConfig(), loadReputation()]);
+  }
+
+  async function loadReputation() {
+    const { agents } = await api("/api/reputation");
+    $("#reputation").innerHTML = Object.values(agents)
+      .map(
+        (s) =>
+          `<div><span class="k">🏅 ${escapeHtml(s.agent_id)}</span><span class="v">rank ${s.rank} · ${s.completed}✓ ${s.failed}✗ ${s.disputed}⚑ · ${s.success_rate}%</span></div>`
+      )
+      .join("");
   }
 
   document.addEventListener("click", async (e) => {
@@ -330,6 +342,10 @@ const EVENT_ICONS = {
   release_blocked: "⛔ Release blocked",
   kill_switch_engaged: "⛔ Kill switch engaged",
   kill_switch_released: "✅ Kill switch released",
+  bid_placed: "💰 Bid placed",
+  bid_awarded: "🤝 Bid awarded",
+  dispute_opened: "⚑ Dispute opened",
+  dispute_resolved: "⚖️ Dispute resolved",
 };
 
 function eventItem(e) {
@@ -409,4 +425,48 @@ async function initJobPage(root) {
     navigator.clipboard?.writeText(location.href);
     $("#copy-link").textContent = "Link copied ✓";
   });
+
+  // bids
+  if ((job.bids || []).length) {
+    $("#bid-panel").hidden = false;
+    $("#bids").innerHTML =
+      job.bids
+        .map(
+          (b) =>
+            `<div><span class="k">${escapeHtml(b.agent_id)}</span><span class="v">$${fmt(b.amount_usd)}${job.selected_bid && job.selected_bid.agent_id === b.agent_id ? " ✓ awarded" : ""}</span></div>`
+        )
+        .join("");
+  }
+
+  // dispute (completed jobs within the window, owner only)
+  if (job.status === "completed" && !job.disputed && (job.dispute_window_minutes || 0) > 0) {
+    $("#dispute-panel").hidden = false;
+    $("#dispute-btn").addEventListener("click", async () => {
+      const reason = $("#dispute-reason").value.trim();
+      const res = $("#dispute-result");
+      res.classList.remove("hidden", "error");
+      if (reason.length < 3) {
+        res.classList.add("error");
+        res.textContent = "Describe what went wrong (at least 3 characters).";
+        return;
+      }
+      try {
+        await api(`/api/jobs/${jobId}/dispute`, {
+          method: "POST",
+          body: JSON.stringify({ reason }),
+        });
+        res.textContent = "✓ Dispute opened. The protocol will resolve it and refund or uphold the payout.";
+        $("#dispute-btn").disabled = true;
+      } catch (err) {
+        res.classList.add("error");
+        res.textContent = `✗ ${err.message}`;
+      }
+    });
+  } else if (job.disputed) {
+    $("#dispute-panel").hidden = false;
+    $("#dispute-panel").querySelector("h2").textContent = "Dispute (open)";
+    $("#dispute-panel").querySelector(".hint").textContent = job.dispute_reason || "";
+    $("#dispute-btn").remove();
+    $("#dispute-reason").remove();
+  }
 }

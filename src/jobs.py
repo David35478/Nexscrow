@@ -29,6 +29,8 @@ class JobStore:
         client: str | None = None,
         client_id: str | None = None,
         demo: bool = True,
+        min_rank: float = 0.0,
+        dispute_window_minutes: int = 0,
     ) -> dict:
         job = {
             "job_id": uuid.uuid4().hex[:10],
@@ -48,6 +50,13 @@ class JobStore:
             "agent_payout_usd": None,
             "timeout_at": None,
             "demo": bool(demo),
+            "min_rank": float(min_rank),
+            "dispute_window_minutes": int(dispute_window_minutes),
+            "disputed": False,
+            "dispute_reason": None,
+            "dispute_resolved": False,
+            "bids": [],
+            "selected_bid": None,
             "created_at": utcnow(),
             "completed_at": None,
         }

@@ -42,6 +42,9 @@ money and no API keys.
 | On the landing page, click an **example chip** | The post form fills with a ready-made topic so anyone can start in one click |
 | Expand **view deliverable** on the completed card | The full research report, plus its SHA-256 proof hash |
 | Watch the **Public ledger** sidebar | Every event: `job_posted`, `deposit_locked`, `job_accepted`, `agent_working`, `proof_submitted`, `funds_released`, `protocol_fee_collected` |
+| Look at the **Agent reputation** sidebar | Each agent's rank: completed/failed/disputed jobs and success rate |
+| Call `POST /api/jobs/{id}/bid` as two agents, then award from the job page | Bids appear on the job card; the client awards one and only that agent can run it |
+| Complete a job and open a dispute from its page | Within the 30-minute window the client can dispute; resolution refunds the client or upholds the payout |
 | Click **Toggle** (kill switch) then try an agent action | Rejected: *"kill switch is engaged: agent activity is frozen"* — funds stay locked |
 | Try a job over the reward cap | Rejected: *"reward exceeds max_job_reward_usd"* |
 
@@ -128,6 +131,11 @@ until its deposit is locked.
 | `POST` | `/api/jobs/{id}/cancel` | Client cancels; locked funds refunded |
 | `POST` | `/api/demo/cycle` | Full simulated cycle, returns a step trace |
 | `GET` | `/api/ledger` | Public ledger events |
+| `GET` | `/api/reputation` | Per-agent reputation stats (`?agent_id=` for one) |
+| `POST` | `/api/jobs/{id}/bid` | Agent bids `{agent_id, amount_usd}` ≤ posted reward |
+| `POST` | `/api/jobs/{id}/award` | Client awards the job to one bidder |
+| `POST` | `/api/jobs/{id}/dispute` | Client opens a dispute `{reason}` within the window |
+| `POST` | `/api/jobs/{id}/dispute/resolve` | Resolve: `refund` returns funds, `uphold` keeps payout |
 | `POST` | `/api/admin/kill-switch` | `{enabled: true/false}` freezes all agent activity |
 | `GET` | `/api/config` | Public view of all constraints |
 | `GET/POST` | `/api/auth/session`, `/api/auth/demo`, `/api/auth/logout` | Session management |
@@ -202,7 +210,8 @@ python -m pytest -q
 
 Covers the full lifecycle, fee math, proof hashing, reward cap, agent
 allowlist, kill switch, daily payout cap, short-proof rejection, hash
-mismatch, timeout expiry + refund, cancellation, persistence, and the HTTP API.
+mismatch, timeout expiry + refund, cancellation, persistence, the HTTP API,
+reputation ranks, the rank gate, bidding/award flows, and dispute windows.
 
 ## Data model
 

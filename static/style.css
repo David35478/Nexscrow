@@ -174,6 +174,11 @@ details pre { white-space: pre-wrap; font-size: 12px; color: var(--text); backgr
 .md code { background: #0b1324; padding: 2px 6px; border-radius: 6px; font-size: 12px; }
 .mono { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px; word-break: break-all; }
 
+.bid-tag {
+  display: inline-block; background: rgba(79,140,255,.12); border: 1px solid var(--line);
+  border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--accent);
+}
+
 @media (max-width: 900px) {
   .steps, .stats { grid-template-columns: repeat(2, 1fr); }
   .cols { grid-template-columns: 1fr; }

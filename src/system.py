@@ -101,6 +101,11 @@ class NexscrowSystem:
             raise ConstraintError(
                 "this job takes bids; the client must award it first"
             )
+        selected = job.get("selected_bid")
+        if selected and selected["agent_id"] != agent_id:
+            raise ConstraintError(
+                f"the client awarded this job to {selected['agent_id']}"
+            )
         minutes = self.constraints.job_timeout_minutes
         timeout_at = (
             utcnow()

@@ -52,9 +52,4 @@ def resolve_dispute(
         raise ConstraintError("this dispute is already resolved")
     if outcome not in ("refund", "uphold"):
         raise ConstraintError("outcome must be 'refund' or 'uphold'")
-    ledger.append(
-        "dispute_resolved",
-        job_id=job["job_id"],
-        details=f"dispute resolution recorded: {outcome}",
-    )
     return jobs.update(job["job_id"], dispute_resolved=True, dispute_outcome=outcome)

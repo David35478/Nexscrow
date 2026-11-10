@@ -66,6 +66,9 @@ def test_bidding_flow(make_system):
     # award to scribe, then only scribe can run it
     job = sys_.award_job(job["job_id"], "agent-scribe-2", client_id=None)
     assert job["selected_bid"]["agent_id"] == "agent-scribe-2"
+    # a non-awarded agent cannot bypass the award
+    with pytest.raises(ConstraintError, match="awarded this job"):
+        sys_.accept_job(job["job_id"], "agent-oracle-1")
     result = sys_.agent_run(job["job_id"], "agent-scribe-2")
     assert result["job"]["status"] == "completed"
 
@@ -102,6 +105,12 @@ def test_dispute_window(make_system):
     job = sys_.resolve(job["job_id"], "refund")
     assert job["dispute_resolved"] is True
     assert job["dispute_outcome"] == "refund"
+    # exactly one dispute_resolved event per resolution
+    resolved_events = [
+        e for e in sys_.ledger.events() if e["event_type"] == "dispute_resolved"
+    ]
+    assert len(resolved_events) == 1
+    assert "funds returned" in (resolved_events[0]["details"] or "").lower()
 
     # a resolved dispute dents the agent's rank
     assert sys_.reputation("agent-scribe-2")["disputed"] == 1

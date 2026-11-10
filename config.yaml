@@ -1,0 +1,31 @@
+# nexscrow - Agent Escrow configuration.
+# All safety rules and integration settings live here.
+
+# Demo mode: fully simulated payments, no real money moves.
+demo_mode: true
+
+# NEAR Intents 1Click payment layer (used when demo_mode is false)
+intents:
+  api_url: https://1click.chaindefuser.com
+  quote_path: /v0/quote
+  tokens_path: /v0/tokens
+  settle_asset_id: nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
+  quote_deadline_seconds: 3600
+
+# Security & constraints
+kill_switch: false
+max_job_reward_usd: 25.0
+max_daily_payout_usd: 500.0
+allowed_agents:
+  - agent-oracle-1
+  - agent-scribe-2
+min_proof_length: 200
+protocol_fee_percent: 2.0
+job_timeout_minutes: 60
+
+# Work engine: "demo" (deterministic template) or "near_ai" (cloud inference)
+work_engine: demo
+near_ai:
+  api_url: https://api.near.ai/v1/chat/completions
+  model: gpt-4o-mini
+  timeout_seconds: 30

@@ -37,6 +37,9 @@ money and no API keys.
 | Open `/` and post a job (any title, e.g. $5) | Job appears with a NEAR Intents-style deposit address and funds `locked` |
 | Open `/dashboard` | Your job on the **Open jobs** board with live stats |
 | Click **Agent accepts & delivers** on a job | Agent produces the deliverable, submits proof, escrow releases funds — status flips to `completed` with payout & fee |
+| Click a job title anywhere | The **job page**: escrow timeline, payout breakdown, rendered deliverable |
+| On a completed job page, click **Verify in my browser** | Your browser recomputes the SHA-256 of the deliverable and confirms it matches the submitted proof — trustless verification, no server involved |
+| On the landing page, click an **example chip** | The post form fills with a ready-made topic so anyone can start in one click |
 | Expand **view deliverable** on the completed card | The full research report, plus its SHA-256 proof hash |
 | Watch the **Public ledger** sidebar | Every event: `job_posted`, `deposit_locked`, `job_accepted`, `agent_working`, `proof_submitted`, `funds_released`, `protocol_fee_collected` |
 | Click **Toggle** (kill switch) then try an agent action | Rejected: *"kill switch is engaged: agent activity is frozen"* — funds stay locked |

@@ -48,11 +48,46 @@ function escapeHtml(s) {
   })[c]);
 }
 
+function renderMarkdown(src) {
+  const lines = escapeHtml(src).split("\n");
+  let html = "";
+  let inList = false;
+  const inline = (s) => s
+    .replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")
+    .replace(/`(.+?)`/g, "<code>$1</code>");
+  for (const line of lines) {
+    const l = line.trim();
+    let m;
+    if (!l) {
+      if (inList) { html += "</ul>"; inList = false; }
+      continue;
+    }
+    if ((m = l.match(/^(#{1,6})\s+(.*)$/))) {
+      if (inList) { html += "</ul>"; inList = false; }
+      const lvl = Math.min(m[1].length, 4);
+      html += `<h${lvl}>${inline(m[2])}</h${lvl}>`;
+    } else if ((m = l.match(/^[-*]\s+(.*)$/))) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      html += `<li>${inline(m[1])}</li>`;
+    } else {
+      if (inList) { html += "</ul>"; inList = false; }
+      html += `<p>${inline(l)}</p>`;
+    }
+  }
+  if (inList) html += "</ul>";
+  return html;
+}
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 function card(job, actions = "") {
   const div = document.createElement("div");
   div.className = "card";
   div.innerHTML = `
-    <div class="title">${escapeHtml(job.title)}
+    <div class="title"><a class="job-link" href="/job/${job.job_id}">${escapeHtml(job.title)}</a>
       <span class="pill ${job.status}">${job.status}</span>
       <span class="pill ${job.payment_status}">funds: ${job.payment_status}</span>
     </div>
@@ -70,7 +105,7 @@ function card(job, actions = "") {
 // ------------------------------------------------------------- landing page
 
 const postForm = $("#post-job");
-if (postForm) {
+  if (postForm) {
   (async () => {
     const [user, config] = await Promise.all([loadSession(), api("/api/config")]);
     renderWho();
@@ -95,6 +130,13 @@ if (postForm) {
       showResult($("#auth-error"), `✗ Login failed: ${escapeHtml(authError)}`, true);
     }
   })();
+
+  document.querySelectorAll(".chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      postForm.querySelector("input[name='title']").value = chip.dataset.title || "";
+      postForm.querySelector("textarea[name='description']").value = chip.dataset.desc || "";
+    });
+  });
 
   postForm.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -145,12 +187,13 @@ if (postForm) {
         method: "POST",
         body: JSON.stringify({}),
       });
-      showResult($("#demo-result"), [
-        ...trace.map((t) => `→ ${t.step}: ${t.detail}`),
-        "",
-        `✓ Job ${job.job_id} completed. Payout $${fmt(job.agent_payout_usd)} to ${job.agent}, fee $${fmt(job.fee_usd)}.`,
-        "See the full history on the public ledger: /dashboard",
-      ]);
+      const box = $("#demo-result");
+      box.classList.remove("hidden", "error");
+      box.innerHTML =
+        trace
+          .map((t) => `<div class="tl-item"><div class="tl-dot"></div><div class="tl-body"><b>${escapeHtml(t.step)}</b><span>${escapeHtml(t.detail)}</span></div></div>`)
+          .join("") +
+        `<div style="margin-top:10px"><a class="btn small primary" href="/job/${job.job_id}">Open the finished job →</a></div>`;
     } catch (err) {
       showResult($("#demo-result"), `✗ ${err.message}`, true);
     } finally {
@@ -266,4 +309,104 @@ if (statsEl) {
 
   refreshAll();
   setInterval(refreshAll, 5000);
+}
+
+// ------------------------------------------------------------- job page
+
+const jobHeader = document.getElementById("job-header");
+if (jobHeader) initJobPage(jobHeader);
+
+const EVENT_ICONS = {
+  job_posted: "📋 Job posted",
+  deposit_approved: "✅ Client approved the transaction",
+  deposit_locked: "🔒 Funds locked in escrow",
+  job_accepted: "🤖 Agent accepted the job",
+  agent_working: "⚙️ Agent working",
+  proof_submitted: "🔏 Proof submitted",
+  funds_released: "💸 Funds released to agent",
+  protocol_fee_collected: "🪙 Protocol fee collected",
+  job_expired: "⏰ Job expired",
+  funds_refunded: "↩️ Funds refunded to client",
+  release_blocked: "⛔ Release blocked",
+  kill_switch_engaged: "⛔ Kill switch engaged",
+  kill_switch_released: "✅ Kill switch released",
+};
+
+function eventItem(e) {
+  const label = EVENT_ICONS[e.event_type] || e.event_type;
+  const ts = String(e.ts || "").replace("T", " ").slice(0, 19) + " UTC";
+  return `<div class="tl-item"><div class="tl-dot"></div><div class="tl-body"><b>${escapeHtml(label)}</b><span>${escapeHtml(e.details || "")}</span><span class="tl-ts">${escapeHtml(ts)}</span></div></div>`;
+}
+
+async function initJobPage(root) {
+  const jobId = root.dataset.jobId || location.pathname.split("/").pop();
+  let job;
+  try {
+    job = await api(`/api/jobs/${jobId}`);
+  } catch (err) {
+    root.innerHTML = `<h2>Job not found</h2><p class="hint">${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  const { events } = await api("/api/ledger");
+  const mine = events.filter((e) => e.job_id === jobId);
+
+  const steps = [
+    ["Posted", true],
+    ["Funded", job.payment_status !== "pending"],
+    ["In progress", ["accepted", "completed"].includes(job.status)],
+    ["Proof verified", !!job.proof_hash],
+    ["Released", job.payment_status === "released"],
+  ];
+  root.innerHTML = `
+    <div class="panel-head">
+      <h2 style="margin:0">${escapeHtml(job.title)}</h2>
+      <div><span class="pill ${job.status}">${job.status}</span>
+      <span class="pill ${job.payment_status}">funds: ${job.payment_status}</span></div>
+    </div>
+    <div class="stepper">${steps
+      .map(([label, on]) => `<span class="step-pill ${on ? "on" : ""}">${on ? "✓" : "○"} ${label}</span>`)
+      .join("")}</div>`;
+
+  $("#timeline").innerHTML = mine.length
+    ? mine.map(eventItem).join("")
+    : '<span class="empty">no events yet</span>';
+
+  $("#money").innerHTML = `<h2>Escrow</h2><div class="kv">
+    <div><span class="k">Reward</span><span class="v">$${fmt(job.reward_usd)}</span></div>
+    <div><span class="k">Protocol fee</span><span class="v">${job.fee_usd != null ? "$" + fmt(job.fee_usd) : "—"}</span></div>
+    <div><span class="k">Agent payout</span><span class="v">${job.agent_payout_usd != null ? "$" + fmt(job.agent_payout_usd) : "—"}</span></div>
+    <div><span class="k">Client</span><span class="v">${escapeHtml(job.client || "anonymous")}</span></div>
+    <div><span class="k">Agent</span><span class="v">${escapeHtml(job.agent || "unassigned")}</span></div>
+    <div><span class="k">Deposit</span><span class="v mono">${escapeHtml(job.deposit_address || "")}</span></div>
+  </div>`;
+
+  $("#deliverable").innerHTML = job.deliverable
+    ? renderMarkdown(job.deliverable)
+    : '<span class="empty">The agent has not delivered yet.</span>';
+
+  $("#proof-hash").textContent = job.proof_hash || "not submitted yet";
+  $("#verify-btn").addEventListener("click", async () => {
+    const res = $("#verify-result");
+    res.classList.remove("hidden", "error");
+    if (!job.proof_hash || !job.deliverable) {
+      res.textContent = "No proof submitted yet — nothing to verify.";
+      return;
+    }
+    try {
+      const hex = await sha256Hex(job.deliverable);
+      const ok = hex === job.proof_hash;
+      res.classList.toggle("error", !ok);
+      res.textContent = ok
+        ? "✓ Verified: the SHA-256 computed in your browser matches the submitted proof. Funds were released on valid proof of work."
+        : "✗ Mismatch: the recomputed hash does not match the submitted proof.";
+    } catch (err) {
+      res.classList.add("error");
+      res.textContent = `Browser crypto unavailable: ${err.message}`;
+    }
+  });
+
+  $("#copy-link").addEventListener("click", () => {
+    navigator.clipboard?.writeText(location.href);
+    $("#copy-link").textContent = "Link copied ✓";
+  });
 }

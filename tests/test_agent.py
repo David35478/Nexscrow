@@ -25,7 +25,7 @@ def test_near_ai_failure_falls_back_to_template(make_system, monkeypatch):
             "timeout_seconds": 2,
         },
     )
-    job = sys_.post_job("Fallback check", "", 1.0)
+    job = sys_.post_job("Fallback check", "", 1.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.accept_job(job["job_id"], "agent-oracle-1")
     job = sys_.run_work(job["job_id"])
@@ -36,7 +36,7 @@ def test_near_ai_failure_falls_back_to_template(make_system, monkeypatch):
 def test_near_ai_without_key_uses_template(make_system, monkeypatch):
     monkeypatch.delenv("NEAR_AI_API_KEY", raising=False)
     sys_ = make_system(work_engine="near_ai")
-    job = sys_.post_job("No key", "", 1.0)
+    job = sys_.post_job("No key", "", 1.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.accept_job(job["job_id"], "agent-oracle-1")
     job = sys_.run_work(job["job_id"])

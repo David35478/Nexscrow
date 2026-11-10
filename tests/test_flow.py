@@ -42,7 +42,7 @@ def test_ledger_records_every_step(make_system):
 
 def test_step_by_step_flow(make_system):
     sys_ = make_system()
-    job = sys_.post_job("Test report", "brief", 4.0)
+    job = sys_.post_job("Test report", "brief", 4.0, release_condition="auto")
     assert job["status"] == "open"
     assert job["payment_status"] == "pending"  # waiting for client approval
     assert job["deposit_address"].endswith("@intents-demo")

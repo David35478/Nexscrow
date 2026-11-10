@@ -8,7 +8,7 @@ from src.constraints import ConstraintError
 
 
 def complete_job(sys_, title, reward=2.0, agent="agent-oracle-1"):
-    job = sys_.post_job(title, "", reward)
+    job = sys_.post_job(title, "", reward, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.accept_job(job["job_id"], agent)
     sys_.run_work(job["job_id"])
@@ -19,7 +19,7 @@ def test_reputation_starts_neutral_and_grows(make_system):
     sys_ = make_system()
     assert sys_.reputation("agent-oracle-1")["completed"] == 0
     stats = sys_.reputation()
-    assert set(stats) == {"agent-oracle-1", "agent-scribe-2"}
+    assert set(stats) == {"agent-oracle-1", "agent-scribe-2", "agent-quant-3"}
     assert all(s["rank"] == 0 for s in stats.values())
 
     complete_job(sys_, "One")
@@ -47,7 +47,7 @@ def test_rank_gate_blocks_low_rank_agents(make_system):
 
 def test_bidding_flow(make_system):
     sys_ = make_system()
-    job = sys_.post_job("Biddable", "", 5.0)
+    job = sys_.post_job("Biddable", "", 5.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
 
     sys_.place_bid(job["job_id"], "agent-oracle-1", 4.5)

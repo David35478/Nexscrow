@@ -19,7 +19,7 @@ def test_reward_cap_rejects_big_jobs(make_system):
 
 def test_agent_allowlist(make_system):
     sys_ = make_system()
-    job = sys_.post_job("Job", "", 1.0)
+    job = sys_.post_job("Job", "", 1.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     with pytest.raises(ConstraintError, match="allowlist"):
         sys_.accept_job(job["job_id"], "agent-rogue-9")
@@ -28,7 +28,7 @@ def test_agent_allowlist(make_system):
 
 def test_kill_switch_freezes_agents(make_system):
     sys_ = make_system()
-    job = sys_.post_job("Job", "", 1.0)
+    job = sys_.post_job("Job", "", 1.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.toggle_kill_switch(True)
     with pytest.raises(ConstraintError, match="kill switch"):
@@ -51,14 +51,14 @@ def test_daily_payout_cap(make_system):
         sys_.run_demo_cycle(reward_usd=5.0)
 
     # escrow kept the money
-    stuck = [j for j in sys_.jobs.list() if j["status"] == "accepted"][0]
+    stuck = [j for j in sys_.jobs.list() if j["status"] == "delivered"][0]
     assert stuck["payment_status"] == "locked"
     assert "release_blocked" in [e["event_type"] for e in sys_.ledger.events()]
 
 
 def test_short_proof_is_rejected(make_system):
     sys_ = make_system(min_proof_length=200)
-    job = sys_.post_job("Job", "", 1.0)
+    job = sys_.post_job("Job", "", 1.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.accept_job(job["job_id"], "agent-oracle-1")
     sys_.run_work(job["job_id"])
@@ -81,7 +81,7 @@ def test_hash_mismatch_detected(make_system):
 
 def test_job_timeout_expires_and_refunds(make_system):
     sys_ = make_system(job_timeout_minutes=0)
-    job = sys_.post_job("Slow job", "", 2.0)
+    job = sys_.post_job("Slow job", "", 2.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     sys_.accept_job(job["job_id"], "agent-oracle-1")
     expired = sys_.expire_jobs()
@@ -94,7 +94,7 @@ def test_job_timeout_expires_and_refunds(make_system):
 
 def test_cancel_refunds_locked_job(make_system):
     sys_ = make_system()
-    job = sys_.post_job("Cancel me", "", 3.0)
+    job = sys_.post_job("Cancel me", "", 3.0, release_condition="auto")
     sys_.approve_deposit(job["job_id"])
     cancelled = sys_.cancel_job(job["job_id"])
     assert cancelled["status"] == "cancelled"

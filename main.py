@@ -33,6 +33,9 @@ class JobCreate(BaseModel):
     reward_usd: float = Field(gt=0)
     client: str | None = None
     min_rank: float = Field(default=0, ge=0, le=100)
+    deliverables: str = Field(default="", max_length=1000)
+    deadline_hours: int | None = Field(default=None, ge=1, le=720)
+    release_condition: str = Field(default="manual", pattern="^(manual|auto)$")
 
 
 class AgentAction(BaseModel):
@@ -268,8 +271,16 @@ def create_app(
             client_id=user["user_id"],
             min_rank=body.min_rank,
             dispute_window_minutes=None,
+            deliverables=body.deliverables,
+            deadline_hours=body.deadline_hours,
+            release_condition=body.release_condition,
         )
         return {"job": job}
+
+    @app.post("/api/jobs/{job_id}/approve-work")
+    async def approve_work(job_id: str, request: Request) -> dict:
+        user = require_user(request)
+        return system.approve_work(job_id, client_id=user["user_id"])
 
     @app.get("/api/jobs/{job_id}")
     async def get_job(job_id: str) -> dict:
@@ -323,6 +334,14 @@ def create_app(
     @app.get("/api/agents")
     async def agents() -> dict:
         return {"agents": system.agent_catalog()}
+
+    @app.get("/api/agents/recommend")
+    async def recommend(title: str, description: str = "") -> dict:
+        return {"agents": system.recommend_agents(title, description)}
+
+    @app.get("/api/leaderboard")
+    async def leaderboard() -> dict:
+        return {"agents": system.leaderboard()}
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def cancel_job(job_id: str, request: Request) -> dict:

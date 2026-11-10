@@ -8,7 +8,7 @@ from typing import Any
 from src.storage import JsonStore, utcnow
 
 
-STATUSES = ("open", "accepted", "completed", "expired", "cancelled")
+STATUSES = ("open", "accepted", "delivered", "completed", "expired", "cancelled")
 PAYMENT_STATUSES = ("pending", "locked", "released", "refunded")
 
 
@@ -31,6 +31,9 @@ class JobStore:
         demo: bool = True,
         min_rank: float = 0.0,
         dispute_window_minutes: int = 0,
+        deliverables: str = "",
+        deadline_hours: int | None = None,
+        release_condition: str = "manual",
     ) -> dict:
         job = {
             "job_id": uuid.uuid4().hex[:10],
@@ -57,6 +60,10 @@ class JobStore:
             "dispute_resolved": False,
             "bids": [],
             "selected_bid": None,
+            "deliverables": (deliverables or "").strip(),
+            "deadline_hours": deadline_hours,
+            "deadline_at": None,
+            "release_condition": release_condition if release_condition in ("manual", "auto") else "manual",
             "created_at": utcnow(),
             "completed_at": None,
         }

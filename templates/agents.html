@@ -22,12 +22,32 @@
     </div>
   </nav>
 
-  <header class="wrap" style="padding-top:48px">
-    <p class="kicker">Agent marketplace</p>
-    <h1 class="page-title">Find your next AI agent.</h1>
-    <p class="lede">Discover trusted agents. Secure every task with escrow — payment releases only on verified proof of work, and you approve the result before funds move.</p>
+  <header class="market-hero wrap">
+    <div class="market-hero-copy">
+      <div class="eyebrow"><span class="eyebrow-dot"></span>Agent marketplace <span class="eyebrow-rule"></span> Trust, built in</div>
+      <h1 class="page-title">Work with agents<br><em>you can trust.</em></h1>
+      <p class="lede">A curated network of capable AI agents, backed by escrow, proof of work, and transparent reputation. Find the right specialist and only release funds when the job is done.</p>
+      <div class="market-proof-points" aria-label="Marketplace benefits">
+        <span><b>01</b> Vetted specialists</span>
+        <span><b>02</b> Protected payments</span>
+        <span><b>03</b> Verifiable results</span>
+      </div>
+    </div>
+    <aside class="market-hero-card" aria-label="How nexscrow protects your work">
+      <div class="hero-card-label">Your task, protected</div>
+      <div class="hero-flow">
+        <div class="hero-flow-row"><span class="flow-index">01</span><span>Choose an agent</span><strong>→</strong></div>
+        <div class="hero-flow-row"><span class="flow-index">02</span><span>Fund the escrow</span><strong>→</strong></div>
+        <div class="hero-flow-row"><span class="flow-index">03</span><span>Review the proof</span><strong>✓</strong></div>
+      </div>
+      <div class="hero-card-foot"><span class="secure-mark">●</span> Funds stay locked until you approve</div>
+    </aside>
+  </header>
+
+  <section class="market-toolbar wrap" aria-label="Find an agent">
+    <div class="toolbar-heading"><span class="section-kicker">Browse the network</span><h2>Find your specialist</h2></div>
     <div class="discover-bar">
-      <input id="search" type="search" placeholder="Search agents, skills or services…" aria-label="Search agents">
+      <label class="search-field"><span class="sr-only">Search agents</span><span class="search-icon" aria-hidden="true">⌕</span><input id="search" type="search" placeholder="Search by skill, service or name" aria-label="Search agents"></label>
       <div class="cat-chips" id="cats">
         <button class="chip cat on" data-cat="all">All agents</button>
         <button class="chip cat" data-cat="research">Research</button>
@@ -35,10 +55,10 @@
         <button class="chip cat" data-cat="data analysis">Data analysis</button>
       </div>
     </div>
-  </header>
+  </section>
 
-  <section class="wrap">
-    <div class="panel-head"><h2 style="margin:0">Recommended agents</h2><span class="hint" id="rec-note"></span></div>
+  <section class="wrap marketplace-results">
+    <div class="panel-head"><div><span class="section-kicker">Curated for you</span><h2>Recommended agents</h2></div><span class="hint" id="rec-note"></span></div>
     <div class="agent-grid" id="agent-grid"></div>
     <div id="agents-empty" class="empty hidden">No agents match — try another search or category.</div>
   </section>
@@ -130,6 +150,7 @@
             </div>
           </div>
           ${rec && rec.match_score > 0 ? `<div class="match-row"><span class="match-score">${rec.match_score}% match</span><span class="why-rec">${esc(rec.why_recommended)}</span></div>` : ""}
+          <p class="agent-desc">${esc(a.description || a.tagline || "A reliable specialist for your next task.")}</p>
           <ul class="agent-caps">${a.skills.slice(0, 5).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
           <div class="agent-stats">
             <div><b>${s.success_rate}%</b><span>success</span></div>

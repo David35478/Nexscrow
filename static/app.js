@@ -2,6 +2,7 @@
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n) => Number(n).toFixed(2);
+let authUser = null;
 
 async function api(path, opts = {}) {
   const res = await fetch(path, {
@@ -17,6 +18,28 @@ function showResult(el, lines, isError = false) {
   el.classList.remove("hidden", "error");
   if (isError) el.classList.add("error");
   el.textContent = Array.isArray(lines) ? lines.join("\n") : lines;
+}
+
+async function loadSession() {
+  const { user } = await api("/api/auth/session");
+  authUser = user;
+  return user;
+}
+
+function renderWho() {
+  const who = $("#who");
+  if (!who) return;
+  if (authUser) {
+    who.classList.remove("hidden");
+    who.innerHTML = `${escapeHtml(authUser.name)} · <a href="#" id="logout-link" style="color:var(--accent)">logout</a>`;
+    $("#logout-link").addEventListener("click", async (e) => {
+      e.preventDefault();
+      await api("/api/auth/logout", { method: "POST" });
+      location.reload();
+    });
+  } else {
+    who.classList.add("hidden");
+  }
 }
 
 function escapeHtml(s) {
@@ -48,6 +71,31 @@ function card(job, actions = "") {
 
 const postForm = $("#post-job");
 if (postForm) {
+  (async () => {
+    const [user, config] = await Promise.all([loadSession(), api("/api/config")]);
+    renderWho();
+    if (config.auth.google_configured) {
+      $("#google-btn").classList.remove("hidden");
+    }
+    if (user) {
+      $("#login-panel").hidden = true;
+      $("#post-panel").hidden = false;
+    }
+    $("#demo-btn").addEventListener("click", async () => {
+      try {
+        await api("/api/auth/demo", { method: "POST", body: "{}" });
+        location.reload();
+      } catch (err) {
+        showResult($("#auth-error"), `✗ ${err.message}`, true);
+      }
+    });
+    $("#near-btn").addEventListener("click", () => window.connectNearWallet("my-near-wallet"));
+    const authError = new URLSearchParams(location.search).get("auth_error");
+    if (authError) {
+      showResult($("#auth-error"), `✗ Login failed: ${escapeHtml(authError)}`, true);
+    }
+  })();
+
   postForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(postForm);
@@ -63,9 +111,26 @@ if (postForm) {
       });
       showResult($("#post-result"), [
         `✓ Job ${job.job_id} posted.`,
-        `Funds: ${job.payment_status} — deposit address: ${job.deposit_address}`,
-        "Watch it on the public board: /dashboard",
+        `Deposit ${job.payment_status}: send $${fmt(job.reward_usd)} to ${job.deposit_address}`,
+        `Then approve the transaction below to lock it in escrow.`,
       ]);
+      const approveBtn = document.createElement("button");
+      approveBtn.className = "btn primary";
+      approveBtn.textContent = "Approve transaction & lock deposit";
+      approveBtn.addEventListener("click", async () => {
+        approveBtn.disabled = true;
+        try {
+          const updated = await api(`/api/jobs/${job.job_id}/deposit/approve`, { method: "POST" });
+          showResult($("#post-result"), [
+            `✓ Deposit locked for job ${job.job_id}.`,
+            "An agent can now pick it up on the public board: /dashboard",
+          ]);
+        } catch (err) {
+          showResult($("#post-result"), `✗ ${err.message}`, true);
+          approveBtn.disabled = false;
+        }
+      });
+      $("#post-result").appendChild(approveBtn);
     } catch (err) {
       showResult($("#post-result"), `✗ ${err.message}`, true);
     }
@@ -123,6 +188,8 @@ if (statsEl) {
     }</div>`;
   }
 
+  loadSession().then(renderWho);
+
   async function loadBoard() {
     const board = await api("/api/jobs");
     const s = board.stats;
@@ -139,8 +206,12 @@ if (statsEl) {
       if (!jobs.length) { el.innerHTML = '<span class="empty">none yet</span>'; return; }
       jobs.forEach((j) => el.appendChild(card(j, actions(j))));
     };
-    render($("#open-jobs"), board.open_jobs, () =>
-      `<button class="btn small primary" data-act="agent-run">Agent accepts &amp; delivers</button>`);
+    const pending = (j) => j.payment_status === "pending" && authUser && j.client_id === authUser.user_id;
+    const openActions = (j) =>
+      pending(j)
+        ? `<button class="btn small primary" data-act="approve">Approve deposit ($${fmt(j.reward_usd)})</button>`
+        : `<button class="btn small primary" data-act="agent-run" ${j.payment_status !== "locked" ? "disabled" : ""}>Agent accepts &amp; delivers</button>`;
+    render($("#open-jobs"), board.open_jobs, openActions);
     render($("#active-jobs"), board.active_jobs, () =>
       `<button class="btn small primary" data-act="agent-run">Continue → proof &amp; release</button>`);
     render($("#completed-jobs"), board.completed_jobs, () => "");
@@ -171,10 +242,14 @@ if (statsEl) {
     const id = btn.closest(".card").querySelector(".meta").textContent.split(" ·")[0].trim();
     btn.disabled = true;
     try {
-      await api(`/api/jobs/${id}/agent-run`, {
-        method: "POST",
-        body: JSON.stringify({ agent_id: $("#agent-select").value }),
-      });
+      if (btn.dataset.act === "approve") {
+        await api(`/api/jobs/${id}/deposit/approve`, { method: "POST" });
+      } else {
+        await api(`/api/jobs/${id}/agent-run`, {
+          method: "POST",
+          body: JSON.stringify({ agent_id: $("#agent-select").value }),
+        });
+      }
     } catch (err) {
       alert(err.message);
     }

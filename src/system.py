@@ -35,11 +35,19 @@ class NexscrowSystem:
         description: str,
         reward_usd: float,
         client: str | None = None,
+        client_id: str | None = None,
     ) -> dict:
         if not title or not title.strip():
             raise ConstraintError("title is required")
         self.constraints.check_reward(reward_usd)
-        job = self.jobs.create(title, description, reward_usd, client, demo=self.constraints.demo_mode)
+        job = self.jobs.create(
+            title,
+            description,
+            reward_usd,
+            client,
+            client_id=client_id,
+            demo=self.constraints.demo_mode,
+        )
         job["deposit_address"] = self.payment.create_deposit_address(job)
         self.jobs.update(job["job_id"], deposit_address=job["deposit_address"])
         self.ledger.append(
@@ -47,14 +55,20 @@ class NexscrowSystem:
             job_id=job["job_id"],
             details=f"'{job['title']}' posted with ${job['reward_usd']:.2f} reward",
         )
-        if self.constraints.demo_mode:
-            job = self.payment.lock_deposit(job, self.jobs, self.ledger)
         return job
 
-    def confirm_deposit(self, job_id: str) -> dict:
+    def approve_deposit(self, job_id: str, client_id: str | None = None) -> dict:
+        """Client approves the payment: simulated lock (demo) or 1Click check (live)."""
         job = self.jobs.get(job_id)
-        if job["payment_status"] == "locked":
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can approve the deposit")
+        if job["payment_status"] != "pending":
             return job
+        self.ledger.append(
+            "deposit_approved",
+            job_id=job_id,
+            details=f"client approved the ${job['reward_usd']:.2f} deposit",
+        )
         return self.payment.lock_deposit(job, self.jobs, self.ledger)
 
     def accept_job(self, job_id: str, agent_id: str) -> dict:
@@ -163,6 +177,8 @@ class NexscrowSystem:
             raise ConstraintError("no allowed agents configured")
         trace: list[dict] = []
         job = self.post_job(title, description, reward_usd, client)
+        self.approve_deposit(job["job_id"], client_id="demo-client")
+        job = self.jobs.get(job["job_id"])
         trace.append(
             {
                 "step": "job_posted_and_locked",
@@ -210,6 +226,13 @@ class NexscrowSystem:
         job = self.jobs.get(job_id)
         if job["status"] not in ("open", "accepted"):
             raise ConstraintError(f"job {job_id} is '{job['status']}' and cannot be cancelled")
+        return self.escrow.refund(job, self.jobs, new_status="cancelled")
+
+    def cancel_job_as(self, job_id: str, client_id: str | None = None) -> dict:
+        """Cancel with an ownership check for the authenticated client."""
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can cancel it")
         return self.escrow.refund(job, self.jobs, new_status="cancelled")
 
     def toggle_kill_switch(self, enabled: bool) -> dict:

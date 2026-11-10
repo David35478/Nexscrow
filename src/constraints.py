@@ -29,6 +29,7 @@ class Constraints:
         self.intents = dict(raw.get("intents", {}))
         self.work_engine = str(raw.get("work_engine", "demo")).lower()
         self.near_ai = dict(raw.get("near_ai", {}))
+        self.auth = dict(raw.get("auth", {}))
 
     def public_view(self) -> dict:
         """Read-only view for the API and dashboard."""

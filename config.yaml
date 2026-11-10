@@ -30,3 +30,9 @@ near_ai:
   api_url: https://api.near.ai/v1/chat/completions
   model: gpt-4o-mini
   timeout_seconds: 30
+
+# Auth: Google OAuth (set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET env vars)
+# and NEAR wallet connect (NEP-413 challenge). Demo login is always available.
+auth:
+  near_network: mainnet
+  near_sign_in_contract: intents.near

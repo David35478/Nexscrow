@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import argparse
 
+from src.env import load_env
 from src.system import NexscrowSystem
 
 
 def main() -> None:
+    load_env()
     parser = argparse.ArgumentParser(description="nexscrow demo cycle (no real money)")
     parser.add_argument(
         "--topic",

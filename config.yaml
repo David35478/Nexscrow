@@ -23,8 +23,9 @@ min_proof_length: 200
 protocol_fee_percent: 2.0
 job_timeout_minutes: 60
 
-# Work engine: "demo" (deterministic template) or "near_ai" (cloud inference)
-work_engine: demo
+# Work engine: "near_ai" (cloud inference) or "demo" (deterministic template).
+# Without NEAR_AI_API_KEY, or if the API call fails, the template is used.
+work_engine: near_ai
 near_ai:
   api_url: https://api.near.ai/v1/chat/completions
   model: gpt-4o-mini

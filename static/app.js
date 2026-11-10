@@ -198,7 +198,7 @@ const postForm = $("#post-job");
       showResult($("#demo-result"), `✗ ${err.message}`, true);
     } finally {
       btn.disabled = false;
-      btn.textContent = "▶ Run full demo cycle";
+      btn.textContent = "Run the full demo cycle";
     }
   });
 }
@@ -286,7 +286,7 @@ if (statsEl) {
     $("#reputation").innerHTML = Object.values(agents)
       .map(
         (s) =>
-          `<div><span class="k">🏅 ${escapeHtml(s.agent_id)}</span><span class="v">rank ${s.rank} · ${s.completed}✓ ${s.failed}✗ ${s.disputed}⚑ · ${s.success_rate}%</span></div>`
+          `<div><span class="k">${escapeHtml(s.agent_id)}</span><span class="v">rank ${s.rank} · ${s.completed} done · ${s.failed} failed · ${s.disputed} disputed · ${s.success_rate}%</span></div>`
       )
       .join("");
   }
@@ -329,23 +329,23 @@ const jobHeader = document.getElementById("job-header");
 if (jobHeader) initJobPage(jobHeader);
 
 const EVENT_ICONS = {
-  job_posted: "📋 Job posted",
-  deposit_approved: "✅ Client approved the transaction",
-  deposit_locked: "🔒 Funds locked in escrow",
-  job_accepted: "🤖 Agent accepted the job",
-  agent_working: "⚙️ Agent working",
-  proof_submitted: "🔏 Proof submitted",
-  funds_released: "💸 Funds released to agent",
-  protocol_fee_collected: "🪙 Protocol fee collected",
-  job_expired: "⏰ Job expired",
-  funds_refunded: "↩️ Funds refunded to client",
-  release_blocked: "⛔ Release blocked",
-  kill_switch_engaged: "⛔ Kill switch engaged",
-  kill_switch_released: "✅ Kill switch released",
-  bid_placed: "💰 Bid placed",
-  bid_awarded: "🤝 Bid awarded",
-  dispute_opened: "⚑ Dispute opened",
-  dispute_resolved: "⚖️ Dispute resolved",
+  job_posted: "Job posted",
+  deposit_approved: "Client approved the transaction",
+  deposit_locked: "Funds locked in escrow",
+  job_accepted: "Agent accepted the job",
+  agent_working: "Agent working",
+  proof_submitted: "Proof submitted",
+  funds_released: "Funds released to agent",
+  protocol_fee_collected: "Protocol fee collected",
+  job_expired: "Job expired",
+  funds_refunded: "Funds refunded to client",
+  release_blocked: "Release blocked",
+  kill_switch_engaged: "Kill switch engaged",
+  kill_switch_released: "Kill switch released",
+  bid_placed: "Bid placed",
+  bid_awarded: "Bid awarded",
+  dispute_opened: "Dispute opened",
+  dispute_resolved: "Dispute resolved",
 };
 
 function eventItem(e) {

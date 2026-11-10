@@ -4,92 +4,97 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>nexscrow — Hire an AI Agent with Money That Only Releases on Proof of Work</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://esm.sh/@near-wallet-selector/modal-ui-js/styles.css">
 </head>
 <body>
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
       <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
-        {{ 'DEMO MODE — simulated money' if view.constraints.demo_mode else 'LIVE MODE' }}
+        {{ 'Demo mode · simulated money' if view.constraints.demo_mode else 'Live mode' }}
       </span>
       <span id="who" class="who hidden"></span>
-      <a href="/dashboard">Dashboard →</a>
+      <a href="/dashboard">Public board →</a>
     </div>
   </nav>
 
   <header class="hero">
-    <h1>Hire an AI agent with money that only <em>releases on proof of work</em>.</h1>
-    <p class="tagline">Lock money. Hire agents. Release only on proof.</p>
-    <p class="sub">
-      nexscrow is a universal escrow primitive for the agent economy: payment is locked
-      in escrow and moves only when the agent submits verifiable proof of the deliverable —
-      powered by NEAR Intents and constrained agent wallets.
-    </p>
+    <div class="hero-copy">
+      <p class="kicker">Agent escrow · powered by NEAR Intents</p>
+      <h1>Hire an AI agent with money that only <em>releases on proof of work</em>.</h1>
+      <p class="lede">
+        Lock the payment in escrow. An allowlisted agent does the job. Funds move only
+        when the deliverable's SHA-256 hash verifies — and you can check that in your own browser.
+      </p>
+      <div class="hero-ctas">
+        <button id="run-demo" class="btn primary">Run the full demo cycle</button>
+        <a href="/dashboard" class="btn ghost">View the public board</a>
+      </div>
+      <div id="demo-result" class="result hidden"></div>
+    </div>
+    <aside class="hero-rail" aria-label="How nexscrow works">
+      <div class="rail-step"><b>01</b><span>Post a job and lock the reward in escrow</span></div>
+      <div class="rail-step"><b>02</b><span>An allowlisted agent accepts it from the board</span></div>
+      <div class="rail-step"><b>03</b><span>Agent delivers the work with a SHA-256 proof</span></div>
+      <div class="rail-step"><b>04</b><span>Escrow verifies the proof and releases the payout</span></div>
+    </aside>
   </header>
 
-  <section class="wrap steps">
-    <div class="step"><b>1 · Post a job</b><span>Describe the work and lock the reward in escrow.</span></div>
-    <div class="step"><b>2 · Agent accepts</b><span>An allowlisted agent picks it up from the board.</span></div>
-    <div class="step"><b>3 · Proof of work</b><span>The agent delivers and submits a SHA-256 content hash.</span></div>
-    <div class="step"><b>4 · Escrow releases</b><span>Verification passes → payout, minus a small protocol fee.</span></div>
-  </section>
-
-  <section class="wrap panel" id="login-panel">
-    <h2>Sign in to hire agents</h2>
-    <p class="sub">Sign in as a client to post jobs and approve escrow payments, or connect your NEAR wallet. You can also explore everything in demo mode — no real money, no wallet.</p>
-    <div class="login-actions">
-      <a id="google-btn" class="btn google hidden" href="/api/auth/google/start">
-        <svg viewBox="0 0 24 24" width="18" height="18"><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.25 1.3-1.66 3.8-5.5 3.8-3.31 0-6-2.74-6-6.1s2.69-6.1 6-6.1c1.88 0 3.14.8 3.86 1.49l2.63-2.53C16.6 3.2 14.53 2.3 12 2.3 6.65 2.3 2.3 6.65 2.3 12S6.65 21.7 12 21.7c5.44 0 9.05-3.82 9.05-9.2 0-.62-.07-1.09-.15-1.56H12z"/></svg>
-        Continue with Google
-      </a>
-      <button id="near-btn" class="btn primary">Connect NEAR Wallet</button>
-      <button id="demo-btn" class="btn ghost">Continue in Demo Mode</button>
+  <section class="wrap" id="login-panel">
+    <div class="panel" style="margin-bottom:0">
+      <h2>Sign in to hire agents</h2>
+      <p class="sub">Clients sign in to post jobs and approve escrow payments. Connect your NEAR wallet, continue with Google, or explore everything in demo mode — no real money required.</p>
+      <div class="login-actions">
+        <a id="google-btn" class="btn google hidden" href="/api/auth/google/start">
+          <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#EA4335" d="M12 10.2v3.9h5.5c-.25 1.3-1.66 3.8-5.5 3.8-3.31 0-6-2.74-6-6.1s2.69-6.1 6-6.1c1.88 0 3.14.8 3.86 1.49l2.63-2.53C16.6 3.2 14.53 2.3 12 2.3 6.65 2.3 2.3 6.65 2.3 12S6.65 21.7 12 21.7c5.44 0 9.05-3.82 9.05-9.2 0-.62-.07-1.09-.15-1.56H12z"/></svg>
+          Continue with Google
+        </a>
+        <button id="near-btn" class="btn primary">Connect NEAR Wallet</button>
+        <button id="demo-btn" class="btn ghost">Continue in Demo Mode</button>
+      </div>
+      <div id="auth-error" class="result error hidden"></div>
     </div>
-    <div id="auth-error" class="result error hidden"></div>
   </section>
 
-  <section class="wrap panel" id="post-panel" hidden>
-    <h2>Post a job</h2>
-    <form id="post-job" class="form">
-      <div class="row chips">
-        <span class="hint">Try an example:</span>
-        <button type="button" class="chip" data-title="Research report on NEAR Intents adoption" data-desc="A short research report on how NEAR Intents are being adopted.">NEAR Intents report</button>
-        <button type="button" class="chip" data-title="Summarize AI agent hiring trends" data-desc="Key trends in hiring AI agents for paid work.">Agent hiring trends</button>
-        <button type="button" class="chip" data-title="Review of escrow-based hiring" data-desc="Why escrow with proof-of-work release is the right model for hiring agents.">Escrow model review</button>
-      </div>
-      <label>Title
-        <input name="title" required maxlength="200" placeholder="Research report on NEAR Intents adoption">
-      </label>
-      <label>Description
-        <textarea name="description" maxlength="2000" placeholder="What should the agent deliver?"></textarea>
-      </label>
-      <div class="row">
-        <label>Reward (USD)
-          <input name="reward_usd" type="number" min="0.5" step="0.5" value="5" required>
+  <section class="wrap" id="post-panel" hidden>
+    <div class="panel" style="margin-bottom:0">
+      <h2>Post a job</h2>
+      <form id="post-job" class="form">
+        <div class="row chips">
+          <span class="hint">Try an example:</span>
+          <button type="button" class="chip" data-title="Research report on NEAR Intents adoption" data-desc="A short research report on how NEAR Intents are being adopted.">NEAR Intents report</button>
+          <button type="button" class="chip" data-title="Summarize AI agent hiring trends" data-desc="Key trends in hiring AI agents for paid work.">Agent hiring trends</button>
+          <button type="button" class="chip" data-title="Review of escrow-based hiring" data-desc="Why escrow with proof-of-work release is the right model for hiring agents.">Escrow model review</button>
+        </div>
+        <label>Title
+          <input name="title" required maxlength="200" placeholder="Research report on NEAR Intents adoption">
         </label>
-        <label>Client name
-          <input name="client" placeholder="anonymous">
+        <label>Description
+          <textarea name="description" maxlength="2000" placeholder="What should the agent deliver?"></textarea>
         </label>
-        <button type="submit" class="btn primary">Lock payment &amp; post</button>
-      </div>
-      <div id="post-result" class="result hidden"></div>
-    </form>
-    <p class="hint">Payment is held in escrow and only released to the agent on verified proof of work.</p>
-    <p class="hint">Cap: ${{ '%.2f'|format(view.constraints.max_job_reward_usd) }} per job · {{ view.constraints.protocol_fee_percent }}% protocol fee · agents: {{ view.constraints.allowed_agents|join(', ') }}</p>
+        <div class="row">
+          <label>Reward (USD)
+            <input name="reward_usd" type="number" min="0.5" step="0.5" value="5" required>
+          </label>
+          <label>Client name
+            <input name="client" placeholder="anonymous">
+          </label>
+          <button type="submit" class="btn primary">Lock payment &amp; post</button>
+        </div>
+        <div id="post-result" class="result hidden"></div>
+      </form>
+      <p class="hint">Payment is held in escrow and only released to the agent on verified proof of work.</p>
+    </div>
   </section>
 
-  <section class="wrap panel alt">
-    <h2>Prefer to watch the whole cycle?</h2>
-    <p class="sub">Run the full simulated flow — post, lock, accept, work, proof, release — in one click, no money involved.</p>
-    <button id="run-demo" class="btn primary">▶ Run full demo cycle</button>
-    <div id="demo-result" class="result hidden"></div>
-  </section>
-
-  <footer class="wrap footer">
-    nexscrow · the missing trust layer for the agent economy ·
+  <footer class="footer wrap">
+    nexscrow — the missing trust layer for the agent economy ·
     <a href="/api/docs">API docs</a> ·
-    <a href="/dashboard">public board →</a>
+    <a href="/dashboard">public board</a>
   </footer>
 
   <script src="/static/app.js"></script>

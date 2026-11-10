@@ -6,10 +6,12 @@ from datetime import datetime, timedelta, timezone
 
 from src.agent import WorkEngine
 from src.constraints import ConstraintError, Constraints
+from src.disputes import open_dispute, resolve_dispute
 from src.escrow import Escrow
 from src.jobs import JobStore
 from src.ledger import Ledger
 from src.payment import PaymentLayer
+from src.reputation import agent_stats, all_agent_stats
 from src.storage import JsonStore, utcnow
 
 
@@ -36,10 +38,17 @@ class NexscrowSystem:
         reward_usd: float,
         client: str | None = None,
         client_id: str | None = None,
+        dispute_window_minutes: int | None = None,
+        min_rank: float = 0.0,
     ) -> dict:
         if not title or not title.strip():
             raise ConstraintError("title is required")
         self.constraints.check_reward(reward_usd)
+        window = (
+            self.constraints.default_dispute_window_minutes
+            if dispute_window_minutes is None
+            else int(dispute_window_minutes)
+        )
         job = self.jobs.create(
             title,
             description,
@@ -47,6 +56,8 @@ class NexscrowSystem:
             client,
             client_id=client_id,
             demo=self.constraints.demo_mode,
+            dispute_window_minutes=window,
+            min_rank=min_rank,
         )
         job["deposit_address"] = self.payment.create_deposit_address(job)
         self.jobs.update(job["job_id"], deposit_address=job["deposit_address"])
@@ -81,6 +92,20 @@ class NexscrowSystem:
             raise ConstraintError(
                 f"job {job_id} has no locked deposit; clients cannot hire before paying"
             )
+        if not self.acceptable_by_rank(job, agent_id):
+            raise ConstraintError(
+                f"agent '{agent_id}' rank {agent_stats(self.jobs, agent_id)['rank']}"
+                f" is below this job's required rank {job['min_rank']}"
+            )
+        if job.get("bids") and not job.get("selected_bid"):
+            raise ConstraintError(
+                "this job takes bids; the client must award it first"
+            )
+        selected = job.get("selected_bid")
+        if selected and selected["agent_id"] != agent_id:
+            raise ConstraintError(
+                f"the client awarded this job to {selected['agent_id']}"
+            )
         minutes = self.constraints.job_timeout_minutes
         timeout_at = (
             utcnow()
@@ -94,6 +119,84 @@ class NexscrowSystem:
             details=f"agent {agent_id} accepted '{job['title']}'",
         )
         return job
+
+    def acceptable_by_rank(self, job: dict, agent_id: str) -> bool:
+        return agent_stats(self.jobs, agent_id)["rank"] >= float(job.get("min_rank") or 0.0)
+
+    # ----------------------------------------------------------- bidding
+
+    def place_bid(self, job_id: str, agent_id: str, amount_usd: float) -> dict:
+        """An allowlisted agent bids to deliver the job for less or equal reward."""
+        self.constraints.assert_live()
+        self.constraints.check_agent(agent_id)
+        job = self.jobs.get(job_id)
+        if job["status"] != "open":
+            raise ConstraintError(f"job {job_id} is '{job['status']}', not open")
+        if not self.acceptable_by_rank(job, agent_id):
+            raise ConstraintError(
+                f"agent '{agent_id}' rank is below this job's required rank {job['min_rank']}"
+            )
+        if amount_usd is None or amount_usd <= 0 or amount_usd > job["reward_usd"]:
+            raise ConstraintError(
+                f"bid must be > 0 and at most the posted reward (${job['reward_usd']:.2f})"
+            )
+        bid = {"agent_id": agent_id, "amount_usd": round(float(amount_usd), 2)}
+
+        def mutate(jobs: dict) -> dict:
+            bids = jobs[job_id].setdefault("bids", [])
+            bids[:] = [b for b in bids if b["agent_id"] != agent_id] + [bid]
+            return jobs[job_id]
+
+        self.ledger.append(
+            "bid_placed",
+            job_id=job_id,
+            details=f"agent {agent_id} bid ${bid['amount_usd']:.2f}",
+        )
+        return self.store.update("jobs", {}, mutate)
+
+    def award_job(self, job_id: str, bid_agent_id: str, client_id: str | None = None) -> dict:
+        """The client awards the job to one bidder; funds stay locked."""
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can award it")
+        if job["status"] != "open":
+            raise ConstraintError(f"job {job_id} is '{job['status']}', not open")
+        bids = job.get("bids") or []
+        if not bids:
+            raise ConstraintError("this job has no bids to award")
+        bid = next((b for b in bids if b["agent_id"] == bid_agent_id), None)
+        if not bid:
+            raise ConstraintError(f"agent '{bid_agent_id}' has not bid on this job")
+        self.ledger.append(
+            "bid_awarded",
+            job_id=job_id,
+            details=f"client awarded the job to {bid_agent_id} at ${bid['amount_usd']:.2f}",
+        )
+        return self.jobs.update(job_id, selected_bid=bid)
+
+    # ---------------------------------------------------------- disputes
+
+    def dispute(self, job_id: str, reason: str, client_id: str | None = None) -> dict:
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can dispute it")
+        return open_dispute(job, reason, self.jobs, self.ledger)
+
+    def resolve(self, job_id: str, outcome: str) -> dict:
+        job = self.jobs.get(job_id)
+        updated = resolve_dispute(job, outcome, self.jobs, self.ledger)
+        if outcome == "refund":
+            self.payment.refund(job, self.jobs, self.ledger)
+            ledger_note = "dispute resolved: funds returned to the client"
+        else:
+            ledger_note = "dispute resolved: payout to the agent stands"
+        self.ledger.append("dispute_resolved", job_id=job_id, details=ledger_note)
+        return self.jobs.get(job_id)
+
+    def reputation(self, agent_id: str | None = None) -> dict:
+        if agent_id:
+            return agent_stats(self.jobs, agent_id)
+        return all_agent_stats(self.jobs, self.constraints.allowed_agents)
 
     def run_work(self, job_id: str) -> dict:
         self.constraints.assert_live()

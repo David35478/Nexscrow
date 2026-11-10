@@ -51,6 +51,19 @@
           <h2>Share this job</h2>
           <button id="copy-link" class="btn ghost">Copy link</button>
         </section>
+
+        <section class="panel side" id="bid-panel" hidden>
+          <h2>Bids</h2>
+          <div id="bids" class="kv"></div>
+        </section>
+
+        <section class="panel side" id="dispute-panel" hidden>
+          <h2>Dispute</h2>
+          <p class="hint">If the deliverable missed the brief, open a dispute within the window. Funds are held while resolved.</p>
+          <textarea id="dispute-reason" placeholder="What went wrong?" style="width:100%;min-height:70px"></textarea>
+          <button id="dispute-btn" class="btn danger" style="margin-top:10px">Open dispute</button>
+          <div id="dispute-result" class="result hidden"></div>
+        </section>
       </div>
     </section>
   </div>

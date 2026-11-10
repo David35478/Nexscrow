@@ -32,6 +32,7 @@ class JobCreate(BaseModel):
     description: str = Field(default="", max_length=2000)
     reward_usd: float = Field(gt=0)
     client: str | None = None
+    min_rank: float = Field(default=0, ge=0, le=100)
 
 
 class AgentAction(BaseModel):
@@ -59,6 +60,23 @@ class NearVerify(BaseModel):
     nonce: str
     recipient: str
     callback_url: str | None = None
+
+
+class PlaceBid(BaseModel):
+    agent_id: str
+    amount_usd: float = Field(gt=0)
+
+
+class AwardBid(BaseModel):
+    agent_id: str
+
+
+class OpenDispute(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+class ResolveDispute(BaseModel):
+    outcome: str
 
 
 def create_app(
@@ -240,6 +258,8 @@ def create_app(
             body.reward_usd,
             client=user["name"],
             client_id=user["user_id"],
+            min_rank=body.min_rank,
+            dispute_window_minutes=None,
         )
         return {"job": job}
 
@@ -268,6 +288,29 @@ def create_app(
     @app.post("/api/jobs/{job_id}/agent-run")
     async def agent_run(job_id: str, body: AgentAction) -> dict:
         return system.agent_run(job_id, body.agent_id)
+
+    @app.post("/api/jobs/{job_id}/bid")
+    async def place_bid(job_id: str, body: PlaceBid) -> dict:
+        return system.place_bid(job_id, body.agent_id, body.amount_usd)
+
+    @app.post("/api/jobs/{job_id}/award")
+    async def award_bid(job_id: str, body: AwardBid, request: Request) -> dict:
+        user = require_user(request)
+        return system.award_job(job_id, body.agent_id, client_id=user["user_id"])
+
+    @app.post("/api/jobs/{job_id}/dispute")
+    async def dispute(job_id: str, body: OpenDispute, request: Request) -> dict:
+        user = require_user(request)
+        return system.dispute(job_id, body.reason, client_id=user["user_id"])
+
+    @app.post("/api/jobs/{job_id}/dispute/resolve")
+    async def resolve(job_id: str, body: ResolveDispute) -> dict:
+        return system.resolve(job_id, body.outcome)
+
+    @app.get("/api/reputation")
+    async def reputation(agent_id: str | None = None) -> dict:
+        stats = system.reputation(agent_id)
+        return {"agents": stats} if agent_id is None else stats
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def cancel_job(job_id: str, request: Request) -> dict:

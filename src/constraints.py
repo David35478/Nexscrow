@@ -18,6 +18,7 @@ class Constraints:
         if path.exists():
             raw = yaml.safe_load(path.read_text()) or {}
         self._raw = raw
+        self.raw = raw
         self.demo_mode = bool(raw.get("demo_mode", True))
         self.kill_switch = bool(raw.get("kill_switch", False))
         self.max_job_reward_usd = float(raw.get("max_job_reward_usd", 25.0))

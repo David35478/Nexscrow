@@ -43,7 +43,7 @@ class PaymentLayer:
             "assetIn": str(self.c.intents.get("settle_asset_id", "usdc.eth")),
             "assetOut": str(self.c.intents.get("settle_asset_id", "nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")),
             "amountIn": str(int(job["reward_usd"] * 10**6)),
-            "recipient": "nexscrow.escrow.near",
+            "recipient": self.c.intents.get("escrow_account", "nexscrow.escrow.near"),
             "deadline": self.c.intents.get("quote_deadline_seconds", 3600),
         }
         try:
@@ -96,8 +96,15 @@ class PaymentLayer:
 
     def release(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Pay the agent and collect the protocol fee."""
+        if not self.demo:
+            # Live-mode payouts require the Intents SDK transfer path, which
+            # is not wired yet. Never pretend money moved: refuse instead.
+            raise PaymentError(
+                "live on-chain payouts are not enabled yet; use demo_mode"
+                " or wire the Intents SDK payout path"
+            )
         payout, fee = self.c.payout_split(job["reward_usd"])
-        mode = "simulated" if self.demo else "intents transfer"
+        mode = "simulated"
         ledger.append(
             "funds_released",
             job_id=job["job_id"],
@@ -122,7 +129,13 @@ class PaymentLayer:
 
     def refund(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Return locked funds to the client."""
-        mode = "simulated" if self.demo else "intents transfer"
+        if not self.demo:
+            # Same as release: never record a transfer that did not happen.
+            raise PaymentError(
+                "live on-chain refunds are not enabled yet; use demo_mode"
+                " or wire the Intents SDK refund path"
+            )
+        mode = "simulated"
         ledger.append(
             "funds_refunded",
             job_id=job["job_id"],

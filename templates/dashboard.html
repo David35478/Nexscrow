@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>nexscrow — Public board &amp; ledger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400..700;1,9..144,400..700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -11,7 +14,7 @@
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
       <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
-        {{ 'DEMO MODE — simulated money' if view.constraints.demo_mode else 'LIVE MODE' }}
+        {{ 'Demo mode · simulated money' if view.constraints.demo_mode else 'Live mode' }}
       </span>
       <span id="who" class="who hidden"></span>
       <a href="/">← Home</a>

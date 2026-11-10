@@ -11,6 +11,15 @@ intents:
   tokens_path: /v0/tokens
   settle_asset_id: nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
   quote_deadline_seconds: 3600
+  # Real escrow account (deposits settle here; payouts originate from it)
+  escrow_account: yurrri.near
+
+# NEAR Intents Agent API (experimental mainnet beta; optional).
+# Activates when NEAR_INTENTS_AGENT_API_KEY is set; falls back to the
+# agent_profiles policies above otherwise. The key is read-only for agent
+# state — policy changes need the owner's signature, payouts need a grant.
+agent_api:
+  url: https://api.agentsonintents.com
 
 # Security & constraints
 kill_switch: false

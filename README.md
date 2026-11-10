@@ -166,13 +166,29 @@ cancellations refund the client.
 
 ## Payments: NEAR Intents 1Click
 
-Demo mode simulates deposits and payouts. For real deposits, set
-`demo_mode: false` and provide `INTENTS_API_KEY`; `src/payment.py` then requests
-a quote from the 1Click API (`https://1click.chaindefuser.com/v0/quote`),
-returns the quote's `depositAddress` to the client, and confirms the deposit by
-polling execution status before the job becomes acceptable. On-chain payouts
-from the escrow account (signed intents transfer) are the next integration
-step; the release logic, fee split and ledger are already wired for it.
+Demo mode simulates deposits and payouts. For real deposits:
+- Get a partner API key at https://partners.near-intents.org/ (1Click API)
+- Set `INTENTS_API_KEY` in your environment / Vercel env vars
+- Set `demo_mode: false` in `config.yaml`
+
+`src/payment.py` then requests a quote from the 1Click API
+(`https://1click.chaindefuser.com/v0/quote`) with deposits settling to the
+`escrow_account` in `config.yaml`, returns the quote's `depositAddress` to the
+client, and confirms the deposit by polling execution status before the job
+becomes acceptable. Fund the escrow account with a little NEAR (gas) and USDC
+(payouts) first — there is no testnet, so use small amounts.
+
+## Agent API (policy verification center)
+
+`src/agent_api.py` is a client for the NEAR Intents Agent API (experimental
+mainnet beta). Set `NEAR_INTENTS_AGENT_API_KEY` to activate live policy reads
+(`GET /v1/agents/{id}/policy`): each agent card's policy footer then shows the
+owner-signed on-chain policy — actions, budgets, destination restrictions,
+freeze state — instead of the config-declared policy. Without the key, the
+marketplace falls back to `agent_profiles` in `config.yaml` (marked
+`source: config`). The key is read-only for agent state: policy changes
+require the owner's wallet signature, and payouts require an owner-signed
+grant token, so the key alone can never move funds.
 
 ## Work engine
 

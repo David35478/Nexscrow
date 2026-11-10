@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 from src.agent import WorkEngine
+from src.agent_api import AgentApiClient
 from src.constraints import ConstraintError, Constraints
 from src.disputes import open_dispute, resolve_dispute
 from src.escrow import Escrow
@@ -28,6 +29,9 @@ class NexscrowSystem:
         self.payment = PaymentLayer(self.constraints)
         self.agent = WorkEngine(self.constraints)
         self.escrow = Escrow(self.constraints, self.payment, self.ledger)
+        self.agent_api = AgentApiClient(
+            base_url=self.constraints.raw.get("agent_api", {}).get("url"),
+        )
 
     # ------------------------------------------------------------- jobs
 
@@ -224,7 +228,10 @@ class NexscrowSystem:
                     "specialization": profile.get("specialization", "General"),
                     "skills": [str(s) for s in profile.get("skills", [])],
                     "verified": bool(profile.get("verified", False)),
-                    "policy": dict(profile.get("policy", {})),
+                    "policy": self.agent_api.policy_summary(
+                        agent_id, dict(profile.get("policy", {}))
+                    ) if self.agent_api.configured
+                    else {**dict(profile.get("policy", {})), "source": "config"},
                     "stats": stats,
                 }
             )
@@ -526,4 +533,6 @@ class NexscrowSystem:
         return {
             "constraints": self.constraints.public_view(),
             "stats": self.board()["stats"],
+            "escrow_account": self.constraints.intents.get("escrow_account"),
+            "agent_api_configured": self.agent_api.configured,
         }

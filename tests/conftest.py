@@ -14,6 +14,7 @@ BASE_CONFIG = {
     "protocol_fee_percent": 2.0,
     "job_timeout_minutes": 60,
     "work_engine": "demo",
+    "intents": {"escrow_account": "yurrri.near"},
     "agent_profiles": {
         "agent-oracle-1": {
             "display_name": "Oracle",

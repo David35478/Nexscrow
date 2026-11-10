@@ -43,7 +43,7 @@ class PaymentLayer:
             "assetIn": str(self.c.intents.get("settle_asset_id", "usdc.eth")),
             "assetOut": str(self.c.intents.get("settle_asset_id", "nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")),
             "amountIn": str(int(job["reward_usd"] * 10**6)),
-            "recipient": "nexscrow.escrow.near",
+            "recipient": self.c.intents.get("escrow_account", "nexscrow.escrow.near"),
             "deadline": self.c.intents.get("quote_deadline_seconds", 3600),
         }
         try:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.agent_api import AgentApiClient
+from tests.conftest import BASE_CONFIG
 
 
 def test_client_unconfigured_falls_back():
@@ -37,3 +38,34 @@ def test_escrow_account_wired(make_system):
 def test_quote_recipient_uses_escrow_account(make_system):
     sys_ = make_system()
     assert sys_.constraints.intents["escrow_account"] == "yurrri.near"
+
+
+def test_live_mode_refuses_release_without_real_payout(tmp_path):
+    from src.payment import PaymentError
+    import yaml
+
+    cfg = {
+        **{k: v for k, v in BASE_CONFIG.items() if k != "demo_mode"},
+        "demo_mode": False,
+    }
+    path = tmp_path / "config.yaml"
+    path.write_text(yaml.safe_dump(cfg))
+    from src.system import NexscrowSystem
+
+    sys_ = NexscrowSystem(str(path), str(tmp_path / "data"))
+    job = sys_.jobs.create("Live release", "", 2.0, release_condition="auto")
+    # skip the 1Click deposit-confirmation path (needs INTENTS_API_KEY);
+    # mark the deposit locked directly so we test the release guard itself
+    sys_.jobs.update(job["job_id"], payment_status="locked")
+    sys_.accept_job(job["job_id"], "agent-oracle-1")
+    sys_.run_work(job["job_id"])
+    import pytest
+
+    with pytest.raises(PaymentError, match="not enabled yet"):
+        sys_.submit_proof(job["job_id"])
+    # funds stay locked; the ledger never claims a transfer
+    stuck = sys_.jobs.get(job["job_id"])
+    assert stuck["payment_status"] == "locked"
+    assert not any(
+        e["event_type"] == "funds_released" for e in sys_.ledger.events()
+    )

@@ -48,6 +48,8 @@ BASE_CONFIG = {
     },
 }
 
+__all__ = ["BASE_CONFIG", "make_config", "make_system"]
+
 
 def make_config(tmp_path, **overrides) -> str:
     cfg = {**BASE_CONFIG, **overrides}

@@ -19,6 +19,36 @@ max_daily_payout_usd: 500.0
 allowed_agents:
   - agent-oracle-1
   - agent-scribe-2
+
+# Agent marketplace profiles - what each agent does, shown to customers.
+agent_profiles:
+  agent-oracle-1:
+    display_name: Oracle
+    tagline: Deep-research analyst
+    description: >
+      Oracle turns a one-line brief into a structured research report:
+      executive summary, key findings with evidence, method, risks and a
+      conclusion. Best for market landscapes, adoption analysis and
+      competitor scans.
+    capabilities:
+      - Structured research reports
+      - Market and adoption analysis
+      - Risk and caveat assessment
+      - NEAR Intents ecosystem expertise
+    delivers_in: "~1 minute"
+  agent-scribe-2:
+    display_name: Scribe
+    tagline: Precision technical writer
+    description: >
+      Scribe writes tight, well-sourced documents - summaries, explainers
+      and reviews - with clean structure and honest limitations. Best when
+      the deliverable must be readable by humans and auditable by machines.
+    capabilities:
+      - Technical summaries and explainers
+      - Model and framework reviews
+      - Editorial structuring
+      - Escrow and payment-flow writing
+    delivers_in: "~1 minute"
 min_proof_length: 200
 protocol_fee_percent: 2.0
 job_timeout_minutes: 60

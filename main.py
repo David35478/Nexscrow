@@ -159,6 +159,14 @@ def create_app(
             context={},
         )
 
+    @app.get("/agents")
+    async def agents_page(request: Request):
+        return templates.TemplateResponse(
+            request=request,
+            name="agents.html",
+            context={"view": system.public_view()},
+        )
+
     # -------------------------------------------------------------- api
 
     # ------------------------------------------------------------- auth
@@ -311,6 +319,10 @@ def create_app(
     async def reputation(agent_id: str | None = None) -> dict:
         stats = system.reputation(agent_id)
         return {"agents": stats} if agent_id is None else stats
+
+    @app.get("/api/agents")
+    async def agents() -> dict:
+        return {"agents": system.agent_catalog()}
 
     @app.post("/api/jobs/{job_id}/cancel")
     async def cancel_job(job_id: str, request: Request) -> dict:

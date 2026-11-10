@@ -198,6 +198,25 @@ class NexscrowSystem:
             return agent_stats(self.jobs, agent_id)
         return all_agent_stats(self.jobs, self.constraints.allowed_agents)
 
+    def agent_catalog(self) -> list[dict]:
+        """Marketplace view: profile + live reputation for every allowlisted agent."""
+        catalog = []
+        for agent_id in self.constraints.allowed_agents:
+            profile = self.constraints.agent_profiles.get(agent_id, {})
+            stats = agent_stats(self.jobs, agent_id)
+            catalog.append(
+                {
+                    "agent_id": agent_id,
+                    "display_name": profile.get("display_name", agent_id),
+                    "tagline": profile.get("tagline", ""),
+                    "description": (profile.get("description") or "").strip(),
+                    "capabilities": profile.get("capabilities", []),
+                    "delivers_in": profile.get("delivers_in", ""),
+                    "stats": stats,
+                }
+            )
+        return catalog
+
     def run_work(self, job_id: str) -> dict:
         self.constraints.assert_live()
         job = self.jobs.get(job_id)

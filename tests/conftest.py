@@ -14,6 +14,15 @@ BASE_CONFIG = {
     "protocol_fee_percent": 2.0,
     "job_timeout_minutes": 60,
     "work_engine": "demo",
+    "agent_profiles": {
+        "agent-oracle-1": {
+            "display_name": "Oracle",
+            "tagline": "Deep-research analyst",
+            "description": "Oracle turns a one-line brief into a structured research report.",
+            "capabilities": ["Structured research reports", "Market analysis", "Risk assessment"],
+            "delivers_in": "~1 minute",
+        }
+    },
 }
 
 

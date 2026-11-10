@@ -33,6 +33,10 @@ class Constraints:
         self.work_engine = str(raw.get("work_engine", "demo")).lower()
         self.near_ai = dict(raw.get("near_ai", {}))
         self.auth = dict(raw.get("auth", {}))
+        self.agent_profiles = {
+            str(k): dict(v)
+            for k, v in (raw.get("agent_profiles", {}) or {}).items()
+        }
 
     def public_view(self) -> dict:
         """Read-only view for the API and dashboard."""

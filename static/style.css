@@ -1,37 +1,38 @@
 /* nexscrow design system — "The missing trust layer for the agent economy."
-   Mode: Redesign / Preserve. Light editorial fintech.
-   Palette (4 hues, oklch-derived): ink (neutral), escrow green, amber, red.
-   Type: Fraunces (display) / Public Sans (body) / ui-monospace (code).
-   Spacing: 8pt grid. Radius: 6px controls, 14px surfaces. Shadows: 3 levels. */
+   Mode: Redesign / Preserve. Reference: Auralis (Stitch) — warm light
+   surfaces, black primary, Geist type, rounded-2xl bordered cards.
+   Palette (4 hues): ink (neutral), escrow green, amber, red.
+   Spacing: 8pt grid. Radius: 8px controls, 16px surfaces. Shadows: 3 levels. */
 
 :root {
   /* palette */
-  --paper: oklch(97.8% 0.006 95);
-  --paper-2: oklch(95.5% 0.008 95);
-  --surface: oklch(99.3% 0.003 95);
-  --ink: oklch(24% 0.018 265);
-  --ink-2: oklch(43% 0.015 265);
-  --ink-3: oklch(62% 0.012 265);
-  --line: oklch(90% 0.008 265);
-  --line-2: oklch(84% 0.01 265);
+  --paper: #fdf8f8;
+  --paper-2: #f1edec;
+  --surface: #ffffff;
+  --surface-2: #f7f3f2;
+  --ink: #1c1b1b;
+  --ink-2: #444748;
+  --ink-3: #747878;
+  --line: #e5e2e1;
+  --line-2: #c4c7c7;
   --accent: oklch(52% 0.115 155);
   --accent-deep: oklch(42% 0.11 155);
   --warn: oklch(55% 0.11 70);
   --danger: oklch(50% 0.18 27);
 
   /* type */
-  --font-display: "Fraunces", Georgia, serif;
-  --font-body: "Public Sans", "Segoe UI", sans-serif;
+  --font-display: "Geist", "Segoe UI", sans-serif;
+  --font-body: "Geist", "Segoe UI", sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
 
   /* spacing (8pt grid) */
   --s1: 8px; --s2: 16px; --s3: 24px; --s4: 32px; --s5: 48px; --s6: 72px;
 
   /* radius + shadows */
-  --r-s: 6px; --r: 14px;
-  --shadow-1: 0 1px 2px oklch(24% 0.018 265 / 6%);
-  --shadow-2: 0 2px 10px oklch(24% 0.018 265 / 8%);
-  --shadow-3: 0 16px 40px oklch(24% 0.018 265 / 12%);
+  --r-s: 8px; --r: 16px;
+  --shadow-1: 0 1px 2px rgb(28 27 27 / 6%);
+  --shadow-2: 0 2px 10px rgb(28 27 27 / 8%);
+  --shadow-3: 0 16px 40px rgb(28 27 27 / 12%);
 }
 
 * { box-sizing: border-box; }
@@ -369,6 +370,82 @@ details pre {
 .footer a { color: var(--ink-2); }
 .footer a:hover { color: var(--accent-deep); }
 .empty { color: var(--ink-3); font-size: 13.5px; font-style: italic; }
+
+/* ------------------------------------------------- agent marketplace */
+
+.page-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 1.1rem + 3vw, 3.2rem);
+  line-height: 1.12; font-weight: 700; letter-spacing: -0.02em;
+  margin: 0 0 var(--s2);
+}
+.page-title em { font-style: normal; color: var(--accent-deep); }
+.nav-on { color: var(--accent-deep); }
+
+.agent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: var(--s3);
+}
+.agent-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: var(--s3);
+  min-height: 320px;
+  display: flex; flex-direction: column; gap: var(--s2);
+  transition: box-shadow .2s, transform .2s, border-color .2s;
+}
+.agent-card:hover {
+  box-shadow: var(--shadow-3);
+  border-color: var(--line-2);
+  transform: translateY(-2px);
+}
+.agent-head { display: flex; align-items: center; gap: var(--s2); }
+.agent-head h3 {
+  margin: 0; font-family: var(--font-display);
+  font-size: 20px; font-weight: 700; letter-spacing: -0.01em;
+}
+.agent-head > div { flex: 1; min-width: 0; }
+.agent-avatar {
+  width: 48px; height: 48px; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 14px; font-family: var(--font-display);
+  font-size: 22px; font-weight: 700;
+  background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--accent-deep);
+}
+.agent-tagline { margin: 2px 0 0; color: var(--ink-3); font-size: 13px; font-weight: 600; }
+.agent-rank {
+  font-family: var(--font-display); font-size: 15px; font-weight: 700;
+  color: var(--accent-deep);
+  background: oklch(52% 0.115 155 / 8%);
+  border: 1px solid oklch(52% 0.115 155 / 45%);
+  border-radius: 999px; padding: 4px 12px; flex: none;
+}
+.agent-desc { color: var(--ink-2); font-size: 14px; line-height: 1.6; margin: 0; }
+.agent-caps {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.agent-caps li {
+  font-size: 12px; font-weight: 600; color: var(--ink-2);
+  background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: 999px; padding: 4px 11px;
+}
+.agent-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s1);
+  margin-top: auto; padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+.agent-stats div { display: flex; flex-direction: column; }
+.agent-stats b { font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+.agent-stats span { font-size: 11.5px; color: var(--ink-3); letter-spacing: .02em; }
+.agent-actions { display: flex; gap: var(--s1); flex-wrap: wrap; }
+
+@media (max-width: 620px) {
+  .agent-grid { grid-template-columns: 1fr; }
+}
 
 /* ---------------------------------------------------------- motion */
 

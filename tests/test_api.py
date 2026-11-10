@@ -136,3 +136,30 @@ def test_job_detail_page(tmp_path):
     assert job_id in r.text
     # unknown job -> 404
     assert c.get("/job/doesnotexist").status_code == 404
+
+
+def test_agent_marketplace(tmp_path):
+    c = client(tmp_path)
+    # catalog merges profiles with live reputation stats
+    agents = c.get("/api/agents").json()["agents"]
+    assert len(agents) == 2
+    oracle = next(a for a in agents if a["agent_id"] == "agent-oracle-1")
+    assert oracle["display_name"] == "Oracle"
+    assert oracle["tagline"] == "Deep-research analyst"
+    assert "research" in oracle["description"].lower()
+    assert len(oracle["capabilities"]) >= 3
+    assert oracle["stats"]["rank"] == 0  # no history yet
+
+    # marketplace page renders
+    r = c.get("/agents")
+    assert r.status_code == 200
+
+    # reputation feeds the catalog once jobs complete
+    login_demo(c)
+    job_id = post_job(c, "Marketplace job", 2.0)
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"})
+    agents = c.get("/api/agents").json()["agents"]
+    oracle = next(a for a in agents if a["agent_id"] == "agent-oracle-1")
+    assert oracle["stats"]["completed"] == 1
+    assert oracle["stats"]["rank"] == 100.0

@@ -259,6 +259,8 @@ if (statsEl) {
     render($("#open-jobs"), board.open_jobs, openActions);
     render($("#active-jobs"), board.active_jobs, () =>
       `<button class="btn small primary" data-act="agent-run">Continue → proof &amp; release</button>`);
+    render($("#delivered-jobs"), board.delivered_jobs, () =>
+      `<button class="btn small primary" data-act="approve-work">Approve &amp; release payment</button>`);
     render($("#completed-jobs"), board.completed_jobs, () => "");
     render($("#expired-jobs"), board.expired_jobs, () => "");
   }
@@ -299,6 +301,8 @@ if (statsEl) {
     try {
       if (btn.dataset.act === "approve") {
         await api(`/api/jobs/${id}/deposit/approve`, { method: "POST" });
+      } else if (btn.dataset.act === "approve-work") {
+        await api(`/api/jobs/${id}/approve-work`, { method: "POST" });
       } else {
         await api(`/api/jobs/${id}/agent-run`, {
           method: "POST",
@@ -342,6 +346,8 @@ const EVENT_ICONS = {
   release_blocked: "Release blocked",
   kill_switch_engaged: "Kill switch engaged",
   kill_switch_released: "Kill switch released",
+  work_delivered: "Work delivered — awaiting client approval",
+  work_approved: "Client approved the work",
   bid_placed: "Bid placed",
   bid_awarded: "Bid awarded",
   dispute_opened: "Dispute opened",
@@ -369,7 +375,8 @@ async function initJobPage(root) {
   const steps = [
     ["Posted", true],
     ["Funded", job.payment_status !== "pending"],
-    ["In progress", ["accepted", "completed"].includes(job.status)],
+    ["In progress", ["accepted", "delivered", "completed"].includes(job.status)],
+    ["Delivered", ["delivered", "completed"].includes(job.status)],
     ["Proof verified", !!job.proof_hash],
     ["Released", job.payment_status === "released"],
   ];
@@ -395,6 +402,26 @@ async function initJobPage(root) {
     <div><span class="k">Agent</span><span class="v">${escapeHtml(job.agent || "unassigned")}</span></div>
     <div><span class="k">Deposit</span><span class="v mono">${escapeHtml(job.deposit_address || "")}</span></div>
   </div>`;
+
+  // buyer approval for delivered jobs
+  if (job.status === "delivered") {
+    const approval = document.createElement("div");
+    approval.style.marginTop = "16px";
+    approval.innerHTML = `
+      <p class="hint" style="margin:0 0 12px">The agent delivered and the proof hash verified. Approve the work to release the escrow, or open a dispute within the window.</p>
+      <button id="approve-btn" class="btn primary">Approve work &amp; release $${fmt(job.reward_usd)}</button>`;
+    $("#money").appendChild(approval);
+    $("#approve-btn").addEventListener("click", async (e) => {
+      e.target.disabled = true;
+      try {
+        await api(`/api/jobs/${jobId}/approve-work`, { method: "POST" });
+        location.reload();
+      } catch (err) {
+        e.target.disabled = false;
+        alert(err.message);
+      }
+    });
+  }
 
   $("#deliverable").innerHTML = job.deliverable
     ? renderMarkdown(job.deliverable)

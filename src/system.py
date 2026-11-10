@@ -40,6 +40,9 @@ class NexscrowSystem:
         client_id: str | None = None,
         dispute_window_minutes: int | None = None,
         min_rank: float = 0.0,
+        deliverables: str = "",
+        deadline_hours: int | None = None,
+        release_condition: str = "manual",
     ) -> dict:
         if not title or not title.strip():
             raise ConstraintError("title is required")
@@ -58,6 +61,9 @@ class NexscrowSystem:
             demo=self.constraints.demo_mode,
             dispute_window_minutes=window,
             min_rank=min_rank,
+            deliverables=deliverables,
+            deadline_hours=deadline_hours,
+            release_condition=release_condition,
         )
         job["deposit_address"] = self.payment.create_deposit_address(job)
         self.jobs.update(job["job_id"], deposit_address=job["deposit_address"])
@@ -113,6 +119,9 @@ class NexscrowSystem:
             else (datetime.now(timezone.utc) + timedelta(minutes=minutes)).isoformat()
         )
         job = self.jobs.update(job_id, status="accepted", agent=agent_id, timeout_at=timeout_at)
+        if job.get("deadline_hours"):
+            due = datetime.now(timezone.utc) + timedelta(hours=float(job["deadline_hours"]))
+            job = self.jobs.update(job_id, deadline_at=due.isoformat())
         self.ledger.append(
             "job_accepted",
             job_id=job_id,
@@ -212,10 +221,46 @@ class NexscrowSystem:
                     "description": (profile.get("description") or "").strip(),
                     "capabilities": profile.get("capabilities", []),
                     "delivers_in": profile.get("delivers_in", ""),
+                    "specialization": profile.get("specialization", "General"),
+                    "skills": [str(s) for s in profile.get("skills", [])],
+                    "verified": bool(profile.get("verified", False)),
+                    "policy": dict(profile.get("policy", {})),
                     "stats": stats,
                 }
             )
         return catalog
+
+    def recommend_agents(self, title: str, description: str = "") -> list[dict]:
+        """Rank agents by keyword overlap between the brief and their skills."""
+        import re
+
+        words = set(w.lower() for w in re.findall(r"[a-z]{3,}", f"{title} {description}"))
+        scored = []
+        for agent in self.agent_catalog():
+            corpus = " ".join(
+                [agent["specialization"], agent["tagline"], *agent["skills"], *agent["capabilities"]]
+            ).lower()
+            hits = sorted(w for w in words if w in corpus)
+            score = min(98, len(hits) * 18 + (10 if agent["verified"] else 0))
+            scored.append(
+                {
+                    **agent,
+                    "match_score": score,
+                    "why_recommended": (
+                        f"Matches your brief: {', '.join(hits[:4])}"
+                        if hits
+                        else "General-purpose; no direct skill overlap"
+                    ),
+                }
+            )
+        scored.sort(key=lambda a: (-a["match_score"], -a["stats"]["rank"]))
+        return scored
+
+    def leaderboard(self) -> list[dict]:
+        """Agents ranked by verified platform history."""
+        rows = [a for a in self.agent_catalog() if a["stats"]["completed"] > 0]
+        rows.sort(key=lambda a: (-a["stats"]["rank"], -a["stats"]["completed"]))
+        return rows
 
     def run_work(self, job_id: str) -> dict:
         self.constraints.assert_live()
@@ -252,10 +297,45 @@ class NexscrowSystem:
         )
         if not ok:
             raise ConstraintError("proof rejected: " + "; ".join(issues))
+        if job.get("release_condition") == "manual":
+            # Buyer-approval escrow: the proof verifies, but funds stay locked
+            # until the client approves the delivered work.
+            job = self.jobs.update(
+                job_id,
+                proof_hash=proof["content_hash"],
+                proof_submitted_at=proof["submitted_at"],
+                status="delivered",
+            )
+            self.ledger.append(
+                "work_delivered",
+                job_id=job_id,
+                details=(
+                    "proof verified; awaiting the client's approval before"
+                    f" ${job['reward_usd']:.2f} is released"
+                ),
+            )
+            return job
         job = self.jobs.update(
             job_id,
             proof_hash=proof["content_hash"],
             proof_submitted_at=proof["submitted_at"],
+        )
+        return self.escrow.release_to_agent(job, self.jobs)
+
+    def approve_work(self, job_id: str, client_id: str | None = None) -> dict:
+        """Buyer approves delivered work; escrow releases the funds."""
+        self.constraints.assert_live()
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can approve the work")
+        if job["status"] != "delivered":
+            raise ConstraintError(
+                f"job {job_id} is '{job['status']}'; only delivered work can be approved"
+            )
+        self.ledger.append(
+            "work_approved",
+            job_id=job_id,
+            details="client approved the deliverable",
         )
         return self.escrow.release_to_agent(job, self.jobs)
 
@@ -273,6 +353,18 @@ class NexscrowSystem:
             {"step": "deliverable_ready", "detail": f"{len(job['deliverable'])} chars produced"}
         )
         job = self.submit_proof(job_id)
+        if job["status"] == "delivered":
+            trace.append(
+                {
+                    "step": "proof_verified_awaiting_approval",
+                    "detail": (
+                        f"hash {job['proof_hash'][:16]}... verified -"
+                        f" ${job['reward_usd']:.2f} stays in escrow until the"
+                        " client approves the work"
+                    ),
+                }
+            )
+            return {"job": job, "trace": trace}
         trace.append(
             {
                 "step": "proof_verified_funds_released",
@@ -292,7 +384,8 @@ class NexscrowSystem:
         reward_usd: float = 5.0,
         client: str = "demo-client",
     ) -> dict:
-        """Full simulated cycle: post -> lock -> accept -> work -> proof -> release."""
+        """Full simulated cycle: post -> lock -> accept -> work -> proof ->
+        (buyer approval) -> release."""
         if not self.constraints.demo_mode:
             raise ConstraintError("run_demo_cycle only works in demo_mode")
         if not self.constraints.allowed_agents:
@@ -312,15 +405,55 @@ class NexscrowSystem:
         )
         result = self.agent_run(job["job_id"], self.constraints.allowed_agents[0])
         trace.extend(result["trace"])
+        if result["job"]["status"] == "delivered":
+            job = self.approve_work(result["job"]["job_id"], client_id="demo-client")
+            trace.append(
+                {
+                    "step": "client_approved_work",
+                    "detail": (
+                        "client approved the deliverable -"
+                        f" ${job['agent_payout_usd']:.2f} released to agent"
+                        f" (${job['fee_usd']:.2f} protocol fee)"
+                    ),
+                }
+            )
+            return {"job": job, "trace": trace}
         return {"job": result["job"], "trace": trace}
 
     # -------------------------------------------------------- maintenance
 
     def expire_jobs(self) -> list[dict]:
-        """Expire accepted jobs whose timeout passed; refund locked funds."""
+        """Expire accepted jobs whose timeout passed; refund abandoned
+        delivered work whose deadline + review window passed."""
         expired: list[dict] = []
         now = datetime.now(timezone.utc)
         for job in self.jobs.list():
+            if job["status"] == "delivered":
+                limit = job.get("deadline_at")
+                if not limit:
+                    continue
+                try:
+                    due = _dt(limit)
+                except ValueError:
+                    continue
+                grace = timedelta(
+                    minutes=int(job.get("dispute_window_minutes") or 0)
+                    or self.constraints.default_dispute_window_minutes
+                )
+                if now >= due + grace:
+                    if job["payment_status"] == "locked":
+                        self.payment.refund(job, self.jobs, self.ledger)
+                    self.jobs.update(job["job_id"], status="expired")
+                    self.ledger.append(
+                        "job_expired",
+                        job_id=job["job_id"],
+                        details=(
+                            "client never approved the delivered work;"
+                            " funds refunded after the review window"
+                        ),
+                    )
+                    expired.append(self.jobs.get(job["job_id"]))
+                continue
             if job["status"] != "accepted" or not job.get("timeout_at"):
                 continue
             try:
@@ -377,6 +510,7 @@ class NexscrowSystem:
             "jobs": jobs,
             "open_jobs": [j for j in jobs if j["status"] == "open"],
             "active_jobs": [j for j in jobs if j["status"] == "accepted"],
+            "delivered_jobs": [j for j in jobs if j["status"] == "delivered"],
             "completed_jobs": completed,
             "expired_jobs": [j for j in jobs if j["status"] in ("expired", "cancelled")],
             "stats": {

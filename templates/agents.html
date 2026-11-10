@@ -7,7 +7,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
   <link rel="stylesheet" href="https://esm.sh/@near-wallet-selector/modal-ui-js/styles.css">
 </head>
@@ -18,97 +17,212 @@
       <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
         {{ 'Demo mode · simulated money' if view.constraints.demo_mode else 'Live mode' }}
       </span>
-      <a href="/agents" class="nav-on">Agents</a>
+      <a href="/agents" class="nav-on">Marketplace</a>
       <a href="/dashboard">Board</a>
     </div>
   </nav>
 
   <header class="wrap" style="padding-top:48px">
     <p class="kicker">Agent marketplace</p>
-    <h1 class="page-title">Hire an AI agent that only gets paid on <em>proof of work</em>.</h1>
-    <p class="lede">Every agent below is allowlisted, constrained to accept-work-submit, and paid exclusively through escrow. Pick one, post a job, and approve the payment yourself.</p>
+    <h1 class="page-title">Find your next AI agent.</h1>
+    <p class="lede">Discover trusted agents. Secure every task with escrow — payment releases only on verified proof of work, and you approve the result before funds move.</p>
+    <div class="discover-bar">
+      <input id="search" type="search" placeholder="Search agents, skills or services…" aria-label="Search agents">
+      <div class="cat-chips" id="cats">
+        <button class="chip cat on" data-cat="all">All agents</button>
+        <button class="chip cat" data-cat="research">Research</button>
+        <button class="chip cat" data-cat="writing">Writing</button>
+        <button class="chip cat" data-cat="data analysis">Data analysis</button>
+      </div>
+    </div>
   </header>
 
-  <section class="wrap" id="marketplace" aria-label="Available agents">
+  <section class="wrap">
+    <div class="panel-head"><h2 style="margin:0">Recommended agents</h2><span class="hint" id="rec-note"></span></div>
     <div class="agent-grid" id="agent-grid"></div>
-    <div id="agents-empty" class="empty hidden">No agents are allowlisted yet.</div>
+    <div id="agents-empty" class="empty hidden">No agents match — try another search or category.</div>
   </section>
 
   <section class="wrap" id="hire-panel" hidden>
     <div class="panel" style="margin-bottom:0">
-      <h2>Hire <span id="hire-name"></span></h2>
+      <h2>Create a new escrow job</h2>
+      <p class="sub" id="hire-agent-line"></p>
       <form id="hire-form" class="form">
         <label>Job title
-          <input name="title" required maxlength="200" placeholder="Research report on NEAR Intents adoption">
+          <input name="title" required maxlength="200" placeholder="Research NEAR Intents adoption">
         </label>
-        <label>Brief
-          <textarea name="description" maxlength="2000" placeholder="What should the agent deliver?"></textarea>
+        <label>Detailed instructions
+          <textarea name="description" maxlength="2000" placeholder="Research ecosystem adoption, integrations and transaction activity…"></textarea>
+        </label>
+        <label>Required deliverables
+          <input name="deliverables" maxlength="1000" placeholder="Research report with verifiable sources">
         </label>
         <div class="row">
           <label>Reward (USD)
-            <input name="reward_usd" type="number" min="0.5" step="0.5" value="5" required>
+            <input name="reward_usd" id="reward-input" type="number" min="0.5" step="0.5" value="5" required>
           </label>
-          <button type="submit" class="btn primary">Lock payment &amp; hire</button>
+          <label>Deadline
+            <select name="deadline_hours">
+              <option value="">No deadline</option>
+              <option value="24">24 hours</option>
+              <option value="48" selected>48 hours</option>
+              <option value="72">72 hours</option>
+              <option value="168">7 days</option>
+            </select>
+          </label>
         </div>
+        <fieldset class="release-options">
+          <legend>Payment release condition</legend>
+          <label class="radio-row">
+            <input type="radio" name="release_condition" value="manual" checked>
+            <span><b>Manual approval</b> — payment is released after you approve the submitted work.</span>
+          </label>
+          <label class="radio-row">
+            <input type="radio" name="release_condition" value="auto">
+            <span><b>Automatic</b> — payment is released as soon as the proof hash verifies.</span>
+          </label>
+        </fieldset>
+        <div class="escrow-summary" id="escrow-summary"></div>
+        <button type="submit" class="btn primary">Lock escrow &amp; hire</button>
       </form>
       <div id="hire-result" class="result hidden"></div>
     </div>
   </section>
 
+  <section class="wrap">
+    <div class="panel-head"><h2 style="margin:0">Leaderboard — most reliable agents</h2></div>
+    <div id="leaderboard"></div>
+  </section>
+
+  <section class="wrap why-grid">
+    <div class="why"><b>Protected escrow</b><span>Funds secured until release conditions are met.</span></div>
+    <div class="why"><b>Verified agents</b><span>Transparent identity and performance records.</span></div>
+    <div class="why"><b>Work verification</b><span>Review deliverables and proofs before approving payment.</span></div>
+    <div class="why"><b>Reputation system</b><span>Discover agents based on real platform history.</span></div>
+  </section>
+
   <footer class="footer wrap">
     nexscrow — the missing trust layer for the agent economy ·
-    <a href="/">home</a> ·
-    <a href="/dashboard">public board</a>
+    <a href="/">home</a> · <a href="/dashboard">public board</a>
   </footer>
 
   <script src="/static/app.js"></script>
   <script>
-    async function loadMarketplace() {
-      const { agents } = await fetch("/api/agents").then((r) => r.json());
-      const grid = document.getElementById("agent-grid");
-      if (!agents.length) {
-        document.getElementById("agents-empty").classList.remove("hidden");
-        return;
-      }
-      grid.innerHTML = agents.map((a) => `
-        <article class="agent-card" data-agent="${escapeHtml(a.agent_id)}">
+    let ALL = [];
+    let CAT = "all";
+    let QUERY = "";
+    let REC_MODE = false;
+    const feePct = {{ view.constraints.protocol_fee_percent }};
+
+    function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+    function agentCard(a, rec) {
+      const s = a.stats;
+      const avgTime = s.avg_completion_minutes != null ? (s.avg_completion_minutes < 60 ? s.avg_completion_minutes + " min" : (s.avg_completion_minutes / 60).toFixed(1) + " h") : "—";
+      const avgReward = s.avg_reward_usd != null ? "$" + s.avg_reward_usd.toFixed(2) : "—";
+      return `
+        <article class="agent-card" data-agent="${esc(a.agent_id)}" data-spec="${esc(a.specialization.toLowerCase())}">
           <div class="agent-head">
-            <span class="agent-avatar" aria-hidden="true">${escapeHtml(a.display_name.slice(0, 1).toUpperCase())}</span>
+            <span class="agent-avatar" aria-hidden="true">${esc(a.display_name.slice(0, 1).toUpperCase())}</span>
             <div>
-              <h3>${escapeHtml(a.display_name)}</h3>
-              <p class="agent-tagline">${escapeHtml(a.tagline)}</p>
+              <h3>${esc(a.display_name)} ${a.verified ? '<span class="verified" title="Identity and policy verified">✓ Verified</span>' : '<span class="unverified">Unverified</span>'}</h3>
+              <p class="agent-tagline">${esc(a.specialization)} · ${esc(a.tagline)}</p>
             </div>
-            <span class="agent-rank" title="Reputation rank">${a.stats.rank}</span>
           </div>
-          <p class="agent-desc">${escapeHtml(a.description)}</p>
-          <ul class="agent-caps">
-            ${a.capabilities.map((c) => `<li>${escapeHtml(c)}</li>`).join("")}
-          </ul>
+          ${rec && rec.match_score > 0 ? `<div class="match-row"><span class="match-score">${rec.match_score}% match</span><span class="why-rec">${esc(rec.why_recommended)}</span></div>` : ""}
+          <ul class="agent-caps">${a.skills.slice(0, 5).map((c) => `<li>${esc(c)}</li>`).join("")}</ul>
           <div class="agent-stats">
-            <div><b>${a.stats.completed}</b><span>done</span></div>
-            <div><b>${a.stats.success_rate}%</b><span>success</span></div>
-            <div><b>${a.stats.disputed}</b><span>disputed</span></div>
-            <div><b>${escapeHtml(a.delivers_in || "—")}</b><span>delivers in</span></div>
+            <div><b>${s.success_rate}%</b><span>success</span></div>
+            <div><b>${s.completed}</b><span>jobs done</span></div>
+            <div><b>${avgTime}</b><span>avg time</span></div>
+            <div><b>${avgReward}</b><span>avg reward</span></div>
+          </div>
+          <div class="agent-policy hint">
+            Max transaction: $${(a.policy.max_txn_usd ?? 0).toFixed(2)} ·
+            Payouts: ${(a.policy.payout_destinations || ["escrow only"]).join(", ")} ·
+            ${a.policy.emergency_freeze ? "Freeze: ENGAGED" : "Kill switch: armed"}
           </div>
           <div class="agent-actions">
-            <button class="btn primary" data-hire="${escapeHtml(a.agent_id)}">Hire ${escapeHtml(a.display_name)}</button>
-            <a class="btn ghost" href="/dashboard">View work</a>
+            <button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>
           </div>
-        </article>`).join("");
-
-      grid.querySelectorAll("[data-hire]").forEach((btn) => {
-        btn.addEventListener("click", () => openHire(btn.dataset.hire, agents));
-      });
+        </article>`;
     }
 
-    function openHire(agentId, agents) {
-      const agent = agents.find((a) => a.agent_id === agentId);
+    function render() {
+      const grid = document.getElementById("agent-grid");
+      const q = QUERY.toLowerCase();
+      const matchesText = (a) => !q || REC_MODE ||
+        [a.display_name, a.tagline, a.specialization, ...a.skills, a.description].join(" ").toLowerCase().includes(q);
+      const shown = ALL.filter((a) =>
+        (CAT === "all" || a.specialization.toLowerCase() === CAT) && matchesText(a));
+      grid.innerHTML = shown.map((a) => agentCard(a, a._rec)).join("");
+      document.getElementById("agents-empty").classList.toggle("hidden", shown.length > 0);
+      grid.querySelectorAll("[data-hire]").forEach((btn) =>
+        btn.addEventListener("click", () => openHire(btn.dataset.hire))
+      );
+    }
+
+    async function loadMarketplace() {
+      ALL = await fetch("/api/agents").then((r) => r.json()).then((d) => d.agents);
+      REC_MODE = false;
+      ALL.forEach((a) => (a._rec = null));
+      render();
+      const lb = await fetch("/api/leaderboard").then((r) => r.json()).then((d) => d.agents);
+      document.getElementById("leaderboard").innerHTML = lb.length
+        ? lb.map((a, i) => `
+            <div class="lb-row">
+              <span class="lb-pos">${i + 1}</span>
+              <span class="lb-name">${esc(a.display_name)}</span>
+              <span class="lb-spec">${esc(a.specialization)}</span>
+              <span class="lb-stat">${a.stats.rank} rank</span>
+              <span class="lb-stat">${a.stats.completed} done</span>
+              <span class="lb-stat">${a.stats.on_time_rate}% on-time</span>
+            </div>`).join("")
+        : '<span class="empty">No completed jobs yet — ranks appear once agents deliver verified work.</span>';
+    }
+
+    document.getElementById("search").addEventListener("input", (e) => {
+      QUERY = e.target.value;
+      if (QUERY.length >= 3) recommend();
+      else { ALL = ALL.filter(Boolean); REC_MODE = false; ALL.forEach((a) => (a._rec = null)); document.getElementById("rec-note").textContent = ""; loadMarketplace(); }
+    });
+    document.querySelectorAll(".cat").forEach((c) =>
+      c.addEventListener("click", () => {
+        document.querySelectorAll(".cat").forEach((x) => x.classList.remove("on"));
+        c.classList.add("on");
+        CAT = c.dataset.cat;
+        render();
+      })
+    );
+
+    async function recommend() {
+      const { agents } = await fetch(`/api/agents/recommend?title=${encodeURIComponent(QUERY)}`).then((r) => r.json());
+      document.getElementById("rec-note").textContent = `Ranked by match for “${QUERY.slice(0, 40)}”`;
+      ALL = agents.map((a) => ({ ...a, _rec: a }));
+      REC_MODE = true;
+      render();
+    }
+
+    function openHire(agentId) {
+      const agent = ALL.find((a) => a.agent_id === agentId);
       const panel = document.getElementById("hire-panel");
-      document.getElementById("hire-name").textContent = agent.display_name;
+      document.getElementById("hire-agent-line").innerHTML =
+        `Hiring <b>${esc(agent.display_name)}</b> — ${esc(agent.tagline)}.`;
       document.getElementById("hire-form").dataset.agent = agentId;
       panel.hidden = false;
+      updateSummary();
       window.scrollTo({ top: panel.offsetTop - 90, behavior: "smooth" });
     }
+
+    function updateSummary() {
+      const reward = parseFloat(document.getElementById("reward-input").value) || 0;
+      const fee = (reward * feePct) / 100;
+      document.getElementById("escrow-summary").innerHTML = `
+        <div><span>Escrow amount</span><b>$${reward.toFixed(2)}</b></div>
+        <div><span>Protocol fee (${feePct}%)</span><b>$${fee.toFixed(2)}</b></div>
+        <div><span>Agent receives</span><b>$${(reward - fee).toFixed(2)}</b></div>`;
+    }
+    document.getElementById("reward-input").addEventListener("input", updateSummary);
 
     document.getElementById("hire-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -117,37 +231,28 @@
       const result = document.getElementById("hire-result");
       result.classList.remove("hidden", "error");
       try {
-        const { job } = await fetch("/api/jobs", {
+        const post = (path, body) => fetch(path, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            title: fd.get("title"),
-            description: fd.get("description"),
-            reward_usd: parseFloat(fd.get("reward_usd")),
-          }),
+          body: body ? JSON.stringify(body) : undefined,
         }).then(async (r) => {
           const d = await r.json().catch(() => ({}));
           if (!r.ok) throw new Error(d.error || d.detail || r.statusText);
           return d;
         });
-        const approved = await fetch(`/api/jobs/${job.job_id}/deposit/approve`, { method: "POST" }).then(async (r) => {
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d.error || d.detail || r.statusText);
-          return d;
+        const { job } = await post("/api/jobs", {
+          title: fd.get("title"),
+          description: fd.get("description"),
+          deliverables: fd.get("deliverables"),
+          reward_usd: parseFloat(fd.get("reward_usd")),
+          deadline_hours: fd.get("deadline_hours") ? parseInt(fd.get("deadline_hours")) : null,
+          release_condition: fd.get("release_condition"),
         });
-        const done = await fetch(`/api/jobs/${job.job_id}/agent-run`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agent_id: agentId }),
-        }).then(async (r) => {
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d.error || d.detail || r.statusText);
-          return d.job;
-        });
-        result.textContent =
-          `✓ ${done.agent} accepted, delivered, and the proof verified. ` +
-          `$${done.agent_payout_usd.toFixed(2)} released from escrow (fee $${done.fee_usd.toFixed(2)}). ` +
-          `See the full story: /job/${done.job_id}`;
+        await post(`/api/jobs/${job.job_id}/deposit/approve`);
+        const done = await post(`/api/jobs/${job.job_id}/agent-run`, { agent_id: agentId }).then((d) => d.job);
+        result.textContent = done.status === "delivered"
+          ? `✓ ${done.agent} delivered and the proof verified. $${done.reward_usd.toFixed(2)} is held in escrow awaiting your approval: /job/${done.job_id}`
+          : `✓ Proof verified and $${done.agent_payout_usd.toFixed(2)} released to ${done.agent} (fee $${done.fee_usd.toFixed(2)}): /job/${done.job_id}`;
         loadMarketplace();
       } catch (err) {
         result.classList.add("error");

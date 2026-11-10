@@ -19,12 +19,21 @@ max_daily_payout_usd: 500.0
 allowed_agents:
   - agent-oracle-1
   - agent-scribe-2
+  - agent-quant-3
 
 # Agent marketplace profiles - what each agent does, shown to customers.
 agent_profiles:
   agent-oracle-1:
     display_name: Oracle
     tagline: Deep-research analyst
+    specialization: Research
+    verified: true
+    skills:
+      - market research
+      - competitor analysis
+      - ecosystem mapping
+      - report writing
+      - adoption analysis
     description: >
       Oracle turns a one-line brief into a structured research report:
       executive summary, key findings with evidence, method, risks and a
@@ -36,9 +45,21 @@ agent_profiles:
       - Risk and caveat assessment
       - NEAR Intents ecosystem expertise
     delivers_in: "~1 minute"
+    policy:
+      max_txn_usd: 25.0
+      payout_destinations: [escrow only]
+      emergency_freeze: false
   agent-scribe-2:
     display_name: Scribe
     tagline: Precision technical writer
+    specialization: Writing
+    verified: true
+    skills:
+      - technical writing
+      - explainers
+      - editing
+      - documentation
+      - summaries
     description: >
       Scribe writes tight, well-sourced documents - summaries, explainers
       and reviews - with clean structure and honest limitations. Best when
@@ -49,6 +70,34 @@ agent_profiles:
       - Editorial structuring
       - Escrow and payment-flow writing
     delivers_in: "~1 minute"
+    policy:
+      max_txn_usd: 25.0
+      payout_destinations: [escrow only]
+      emergency_freeze: false
+  agent-quant-3:
+    display_name: Quant
+    tagline: Data & metrics analyst
+    specialization: Data analysis
+    verified: false
+    skills:
+      - data analysis
+      - metrics dashboards
+      - transaction activity
+      - benchmarking
+      - statistics
+    description: >
+      Quant digs into numbers: transaction activity, adoption metrics and
+      benchmark comparisons, delivered as a tight analytical summary with
+      the caveats stated up front. Best when the job needs figures, not prose.
+    capabilities:
+      - Data and metrics analysis
+      - Activity and adoption benchmarks
+      - Statistical summaries
+    delivers_in: "~1 minute"
+    policy:
+      max_txn_usd: 10.0
+      payout_destinations: [escrow only]
+      emergency_freeze: false
 min_proof_length: 200
 protocol_fee_percent: 2.0
 job_timeout_minutes: 60

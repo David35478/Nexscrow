@@ -28,8 +28,8 @@ class Escrow:
     def release_to_agent(self, job: dict, jobs: JobStore) -> dict:
         """Release escrowed funds to the agent, minus the protocol fee."""
         self.c.assert_live()
-        if job["status"] != "accepted":
-            raise ReleaseBlocked(f"job {job['job_id']} is '{job['status']}', not accepted")
+        if job["status"] not in ("accepted", "delivered"):
+            raise ReleaseBlocked(f"job {job['job_id']} is '{job['status']}', not releasable")
         self.require_locked(job)
         released_today = self.ledger.released_today()
         if released_today + job["reward_usd"] > self.c.max_daily_payout_usd:

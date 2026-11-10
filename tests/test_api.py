@@ -64,7 +64,7 @@ def test_api_full_lifecycle_with_approval(tmp_path):
     assert r.json()["job"]["status"] == "completed"
 
     # manual flow: post -> approve -> agent run
-    job_id = post_job(c, "Manual report", 3.0, description="d")
+    job_id = post_job(c, "Manual report", 3.0, description="d", release_condition="auto")
     assert c.get(f"/api/jobs/{job_id}").json()["payment_status"] == "pending"
 
     r = c.post(f"/api/jobs/{job_id}/deposit/approve")
@@ -142,9 +142,12 @@ def test_agent_marketplace(tmp_path):
     c = client(tmp_path)
     # catalog merges profiles with live reputation stats
     agents = c.get("/api/agents").json()["agents"]
-    assert len(agents) == 2
+    assert len(agents) == 3
     oracle = next(a for a in agents if a["agent_id"] == "agent-oracle-1")
     assert oracle["display_name"] == "Oracle"
+    assert oracle["specialization"] == "Research"
+    assert oracle["verified"] is True
+    assert oracle["policy"]["max_txn_usd"] == 25.0
     assert oracle["tagline"] == "Deep-research analyst"
     assert "research" in oracle["description"].lower()
     assert len(oracle["capabilities"]) >= 3
@@ -156,10 +159,90 @@ def test_agent_marketplace(tmp_path):
 
     # reputation feeds the catalog once jobs complete
     login_demo(c)
-    job_id = post_job(c, "Marketplace job", 2.0)
+    job_id = post_job(c, "Marketplace job", 2.0, release_condition="auto")
     c.post(f"/api/jobs/{job_id}/deposit/approve")
     c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"})
     agents = c.get("/api/agents").json()["agents"]
     oracle = next(a for a in agents if a["agent_id"] == "agent-oracle-1")
     assert oracle["stats"]["completed"] == 1
     assert oracle["stats"]["rank"] == 100.0
+
+
+def test_manual_release_requires_buyer_approval(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    # manual release: proof verifies but funds stay locked until approval
+    job_id = post_job(
+        c, "Manual release job", 3.0,
+        deliverables="Report with sources",
+        deadline_hours=48,
+        release_condition="manual",
+    )
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    done = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"}).json()
+    assert done["job"]["status"] == "delivered"
+    assert done["job"]["payment_status"] == "locked"
+    assert done["job"]["deadline_at"] is not None
+
+    # approving as the owner releases the escrow
+    released = c.post(f"/api/jobs/{job_id}/approve-work").json()
+    assert released["status"] == "completed"
+    assert released["payment_status"] == "released"
+    events = c.get("/api/ledger").json()["events"]
+    assert any(e["event_type"] == "work_delivered" for e in events)
+    assert any(e["event_type"] == "work_approved" for e in events)
+
+
+def test_auto_release_bypasses_approval(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    job_id = post_job(c, "Auto release job", 3.0, release_condition="auto")
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    done = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"}).json()
+    assert done["job"]["status"] == "completed"
+    assert done["job"]["payment_status"] == "released"
+
+
+def test_approve_work_requires_delivered(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    job_id = post_job(c, "Not delivered", 1.0)
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    r = c.post(f"/api/jobs/{job_id}/approve-work")
+    assert r.status_code == 400
+    assert "only delivered work" in r.json()["error"]
+
+
+def test_abandoned_delivered_job_refunds_after_window(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    # delivered (awaiting approval) with a deadline that has passed
+    job_id = post_job(c, "Abandoned review", 2.0, deadline_hours=48, release_condition="manual")
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    done = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"}).json()
+    assert done["job"]["status"] == "delivered"
+    # push the deadline (and review window) into the past
+    c.app.state.system.jobs.update(job_id, deadline_at="2020-01-01T00:00:00+00:00")
+    # hitting the board runs expiry
+    board = c.get("/api/jobs").json()
+    expired = [j for j in board["expired_jobs"] if j["job_id"] == job_id]
+    assert expired, "abandoned delivered job should expire"
+    assert expired[0]["payment_status"] == "refunded"
+
+
+def test_recommendation_and_leaderboard(tmp_path):
+    c = client(tmp_path)
+    recs = c.get("/api/agents/recommend", params={"title": "research market adoption"}).json()["agents"]
+    assert recs[0]["specialization"] == "Research"
+    assert recs[0]["match_score"] > 0
+    assert "Matches your brief" in recs[0]["why_recommended"]
+
+    login_demo(c)
+    job_id = post_job(c, "Data analysis of activity", 2.0, release_condition="auto")
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-quant-3"})
+    lb = c.get("/api/leaderboard").json()["agents"]
+    assert any(a["agent_id"] == "agent-quant-3" for a in lb)
+    quant = next(a for a in c.get("/api/agents").json()["agents"] if a["agent_id"] == "agent-quant-3")
+    assert quant["stats"]["avg_reward_usd"] == 2.0
+    assert quant["stats"]["avg_completion_minutes"] is not None

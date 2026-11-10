@@ -125,10 +125,36 @@ step; the release logic, fee split and ledger are already wired for it.
 
 ## Work engine
 
-`work_engine: demo` produces a deterministic, structured research report from
-the job (always available, zero cost). Set `work_engine: near_ai` and provide
-`NEAR_AI_API_KEY` to generate the deliverable with cloud NEAR AI inference;
-any API failure falls back to the template so a paid job never stalls.
+`work_engine: near_ai` (the default) generates the deliverable with cloud
+NEAR AI inference (`api.near.ai`, OpenAI-compatible) when `NEAR_AI_API_KEY`
+is set — locally via a `.env` file, on Vercel via project environment
+variables. Without a key, or if the API call fails, the agent falls back to a
+deterministic template so a paid job never stalls.
+
+## Deploy to Vercel
+
+The repo is Vercel-ready with no extra config: Vercel's FastAPI preset
+detects the `app` in `main.py`, installs `requirements.txt` (Python 3.12),
+and serves every route from a single function; the `/static` mount is served
+from the CDN. `vercel.json` only raises the function duration to 60s for AI
+inference.
+
+1. On vercel.com → **Add New… → Project** → import the GitHub repo
+   (`David35478/Nexscrow`). Framework preset: *FastAPI* (auto-detected).
+2. **Environment Variables** → add `NEAR_AI_API_KEY` with your key
+   (Production + Preview). Money stays simulated either way.
+3. **Deploy** → you get `https://<project>.vercel.app` with the landing page,
+   dashboard, and API.
+
+Notes:
+- On Vercel only `/tmp` is writable, so the JSON store automatically falls
+  back to `/tmp/nexscrow`; demo data is ephemeral per instance and resets on
+  cold starts — fine for demos. Swap `src/storage.py` for a database for
+  anything persistent.
+- Never commit the key. It lives in Vercel env vars (or a local `.env`, which
+  is gitignored).
+- For real deposits later, add `INTENTS_API_KEY` the same way and set
+  `demo_mode: false` in `config.yaml`.
 
 ## Tests
 

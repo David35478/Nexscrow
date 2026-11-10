@@ -11,6 +11,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
 from src.constraints import ConstraintError
+from src.env import load_env
 from src.escrow import ReleaseBlocked
 from src.jobs import JobNotFound
 from src.payment import PaymentError
@@ -18,6 +19,8 @@ from src.system import NexscrowSystem
 
 
 BASE_DIR = Path(__file__).parent
+
+load_env()
 
 
 class JobCreate(BaseModel):

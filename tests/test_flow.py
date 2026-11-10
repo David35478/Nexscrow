@@ -27,6 +27,7 @@ def test_ledger_records_every_step(make_system):
     types = [e["event_type"] for e in sys_.ledger.events()]
     for expected in (
         "job_posted",
+        "deposit_approved",
         "deposit_locked",
         "job_accepted",
         "agent_working",
@@ -43,8 +44,11 @@ def test_step_by_step_flow(make_system):
     sys_ = make_system()
     job = sys_.post_job("Test report", "brief", 4.0)
     assert job["status"] == "open"
-    assert job["payment_status"] == "locked"  # demo mode auto-locks
+    assert job["payment_status"] == "pending"  # waiting for client approval
     assert job["deposit_address"].endswith("@intents-demo")
+
+    job = sys_.approve_deposit(job["job_id"])
+    assert job["payment_status"] == "locked"
 
     job = sys_.accept_job(job["job_id"], "agent-scribe-2")
     assert job["status"] == "accepted"

@@ -27,6 +27,7 @@ class JobStore:
         description: str,
         reward_usd: float,
         client: str | None = None,
+        client_id: str | None = None,
         demo: bool = True,
     ) -> dict:
         job = {
@@ -36,6 +37,7 @@ class JobStore:
             "reward_usd": float(reward_usd),
             "status": "open",
             "client": client or "anonymous",
+            "client_id": client_id,
             "agent": None,
             "deposit_address": None,
             "payment_status": "pending",

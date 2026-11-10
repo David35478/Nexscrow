@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nexscrow — completing wallet sign-in…</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="wrap hero">
+    <h1 style="font-size:28px">Completing wallet sign-in…</h1>
+    <div id="callback-status" class="result">Verifying your wallet signature.</div>
+    <p><a href="/">← back to nexscrow</a></p>
+  </div>
+  <script type="module">
+    const params = new URLSearchParams(location.search);
+    const status = document.getElementById("callback-status");
+    const accountId = params.get("accountId");
+    const publicKey = params.get("publicKey");
+    const signature = params.get("signature");
+    const challenge = params.get("challenge");
+
+    if (!accountId || !publicKey || !signature || !challenge) {
+      status.classList.add("error");
+      status.textContent = "Missing wallet signature data. Please retry connecting your NEAR wallet.";
+    } else {
+      const callbackUrl = `${location.origin}${location.pathname}?challenge=${challenge}`;
+      try {
+        const res = await fetch("/api/auth/near/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            account_id: accountId,
+            public_key: publicKey,
+            signature: signature,
+            nonce: challenge,
+            recipient: location.hostname,
+            callback_url: callbackUrl,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
+        status.textContent = `✓ Signed in as ${data.user.name}. Redirecting…`;
+        setTimeout(() => (location.href = "/"), 1200);
+      } catch (err) {
+        status.classList.add("error");
+        status.textContent = `✗ ${err.message}`;
+      }
+    }
+  </script>
+</body>
+</html>

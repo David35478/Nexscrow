@@ -46,6 +46,7 @@ money and no API keys.
 
 ```text
 Client
+  | sign in (Google / NEAR wallet / demo mode)
   | post job + lock payment (NEAR Intents 1Click / simulated deposit)
 Job Board + Escrow
   | open, funded job
@@ -57,8 +58,39 @@ Payout to agent + protocol fee -> Public Ledger
 ```
 
 The agent **can never move funds**. It only accepts jobs, produces the
-deliverable, and submits proof. All money movement happens exclusively in the
-escrow layer, after verification.
+deliverable, and submits proof. Clients **sign in** and explicitly **approve
+each transaction** before funds enter escrow. All money movement happens
+exclusively in the escrow layer, after verification.
+
+## Authentication
+
+Clients must sign in before posting jobs, approving payments or cancelling.
+Three options, all issuing the same server-side session (HttpOnly cookie):
+
+- **Continue with Google** — OAuth 2.0 code flow. Set `GOOGLE_CLIENT_ID` and
+  `GOOGLE_CLIENT_SECRET` (env vars or `.env`), create OAuth credentials at
+  [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials),
+  and register `<your-domain>/api/auth/google/callback` as an authorized
+  redirect URI. The button only appears when these are configured.
+- **Connect NEAR Wallet** — NEP-413 message signing via wallet-selector
+  (MyNearWallet, Meteor). The backend issues a one-time nonce; your wallet
+  signs it with an access key; the signature is Ed25519-verified and the
+  public key is confirmed against the account on NEAR mainnet RPC. No
+  private key ever leaves your wallet.
+- **Continue in Demo Mode** — a simulated per-session identity. Full app,
+  simulated money, zero setup.
+
+Signing in is only required for client actions; the job board and ledger stay
+public, and agents act autonomously once a job is funded.
+
+## Transaction approval
+
+Posting a job creates it with a **pending** deposit: the client sees the
+deposit address and must explicitly click **Approve transaction** before the
+reward enters escrow. In demo mode this simulates the approval instantly; in
+live mode it confirms the NEAR Intents 1Click deposit status. Only the client
+who posted the job can approve or cancel it, and agents cannot touch a job
+until its deposit is locked.
 
 ## Architecture
 
@@ -82,10 +114,10 @@ escrow layer, after verification.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/api/jobs` | Post a job (locks funds automatically in demo mode) |
+| `POST` | `/api/jobs` | Post a job (session required; deposit starts pending) |
 | `GET` | `/api/jobs` | Board: open / active / completed / expired + stats |
 | `GET` | `/api/jobs/{id}` | Job detail incl. deliverable |
-| `POST` | `/api/jobs/{id}/deposit/confirm` | Confirm the 1Click deposit (real mode) |
+| `POST` | `/api/jobs/{id}/deposit/approve` | Client approves the deposit (session required) |
 | `POST` | `/api/jobs/{id}/accept` | Agent accepts `{agent_id}` |
 | `POST` | `/api/jobs/{id}/work` | Agent produces the deliverable |
 | `POST` | `/api/jobs/{id}/proof` | Submit proof `{content?}` → verify → release |
@@ -95,6 +127,9 @@ escrow layer, after verification.
 | `GET` | `/api/ledger` | Public ledger events |
 | `POST` | `/api/admin/kill-switch` | `{enabled: true/false}` freezes all agent activity |
 | `GET` | `/api/config` | Public view of all constraints |
+| `GET/POST` | `/api/auth/session`, `/api/auth/demo`, `/api/auth/logout` | Session management |
+| `GET` | `/api/auth/google/start`, `/api/auth/google/callback` | Google OAuth |
+| `POST` | `/api/auth/near/init`, `/api/auth/near/verify` | NEAR wallet NEP-413 challenge |
 
 ## Security & constraints (all in `config.yaml`)
 

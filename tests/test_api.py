@@ -213,6 +213,23 @@ def test_approve_work_requires_delivered(tmp_path):
     assert "only delivered work" in r.json()["error"]
 
 
+def test_abandoned_delivered_job_refunds_after_window(tmp_path):
+    c = client(tmp_path)
+    login_demo(c)
+    # delivered (awaiting approval) with a deadline that has passed
+    job_id = post_job(c, "Abandoned review", 2.0, deadline_hours=48, release_condition="manual")
+    c.post(f"/api/jobs/{job_id}/deposit/approve")
+    done = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"}).json()
+    assert done["job"]["status"] == "delivered"
+    # push the deadline (and review window) into the past
+    c.app.state.system.jobs.update(job_id, deadline_at="2020-01-01T00:00:00+00:00")
+    # hitting the board runs expiry
+    board = c.get("/api/jobs").json()
+    expired = [j for j in board["expired_jobs"] if j["job_id"] == job_id]
+    assert expired, "abandoned delivered job should expire"
+    assert expired[0]["payment_status"] == "refunded"
+
+
 def test_recommendation_and_leaderboard(tmp_path):
     c = client(tmp_path)
     recs = c.get("/api/agents/recommend", params={"title": "research market adoption"}).json()["agents"]

@@ -423,10 +423,37 @@ class NexscrowSystem:
     # -------------------------------------------------------- maintenance
 
     def expire_jobs(self) -> list[dict]:
-        """Expire accepted jobs whose timeout passed; refund locked funds."""
+        """Expire accepted jobs whose timeout passed; refund abandoned
+        delivered work whose deadline + review window passed."""
         expired: list[dict] = []
         now = datetime.now(timezone.utc)
         for job in self.jobs.list():
+            if job["status"] == "delivered":
+                limit = job.get("deadline_at")
+                if not limit:
+                    continue
+                try:
+                    due = _dt(limit)
+                except ValueError:
+                    continue
+                grace = timedelta(
+                    minutes=int(job.get("dispute_window_minutes") or 0)
+                    or self.constraints.default_dispute_window_minutes
+                )
+                if now >= due + grace:
+                    if job["payment_status"] == "locked":
+                        self.payment.refund(job, self.jobs, self.ledger)
+                    self.jobs.update(job["job_id"], status="expired")
+                    self.ledger.append(
+                        "job_expired",
+                        job_id=job["job_id"],
+                        details=(
+                            "client never approved the delivered work;"
+                            " funds refunded after the review window"
+                        ),
+                    )
+                    expired.append(self.jobs.get(job["job_id"]))
+                continue
             if job["status"] != "accepted" or not job.get("timeout_at"):
                 continue
             try:

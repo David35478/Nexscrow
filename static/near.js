@@ -1,12 +1,16 @@
 /* NEAR wallet connect.
-   Primary: NEAR Connect (@hot-labs/near-connect) — the docs.near.org
-   connector; connector.connect() opens the supported-wallet modal.
-   Fallback: wallet-selector modal (previously primary).
-   Both finish with a NEP-413 signMessage challenge verified by the backend. */
+   Primary: NEAR Connect (@hot-labs/near-connect) — connector.connect() opens
+   the supported-wallet modal. Login is driven by the connector's
+   wallet:signIn event and getConnectedWallet() restore (the documented
+   docs.near.org pattern), so a closed modal never orphans an approved wallet.
+   Fallback: wallet-selector modal. Both finish with a NEP-413 signMessage
+   challenge verified by the backend. */
 
 let connector = null;   // NEAR Connect instance
 let selector = null;    // wallet-selector fallback instance
 let selectorModal = null;
+let connectPending = false;
+let loginInFlight = false;
 
 function b64urlToBytes(value) {
   const padded = value + "=".repeat((4 - (value.length % 4)) % 4);
@@ -26,26 +30,44 @@ async function getConfig() {
   return fetch("/api/config").then((r) => r.json());
 }
 
-async function loginWithWallet(wallet, opts = {}) {
-  const challenge = await fetch("/api/auth/near/init", { method: "POST" })
-    .then((r) => r.json());
-  const signArgs = {
-    message: challenge.message,
-    recipient: location.hostname,
-    nonce: b64urlToBytes(challenge.nonce),
-  };
-  if (wallet.type === "browser" || opts.redirect) {
-    // Browser wallets sign then redirect back with the signature attached.
-    signArgs.callbackUrl =
-      `${location.origin}/near-callback?challenge=${challenge.nonce}`;
-    await wallet.signMessage(signArgs);
-  } else {
+async function primaryAccount(wallet) {
+  try {
+    const accounts = await wallet.getAccounts();
+    return accounts && accounts.length ? accounts[0].accountId : null;
+  } catch {
+    return null;
+  }
+}
+
+async function completeLogin(wallet) {
+  // The signIn event and the connect() promise can both fire for one login;
+  // the guard keeps the second from consuming a second challenge.
+  if (loginInFlight) return;
+  loginInFlight = true;
+  try {
+    const accountId = await primaryAccount(wallet);
+    if (!accountId) throw new Error("wallet returned no account");
+    const challenge = await fetch("/api/auth/near/init", { method: "POST" })
+      .then((r) => r.json());
+    const signArgs = {
+      message: challenge.message,
+      recipient: location.hostname,
+      nonce: b64urlToBytes(challenge.nonce),
+    };
+    if (wallet.type === "browser") {
+      // Redirect wallets sign, then return to /near-callback with the
+      // signature attached.
+      signArgs.callbackUrl =
+        `${location.origin}/near-callback?challenge=${challenge.nonce}`;
+      await wallet.signMessage(signArgs);
+      return;
+    }
     const signed = await wallet.signMessage(signArgs);
     const res = await fetch("/api/auth/near/verify", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        account_id: signed.accountId,
+        account_id: accountId,
         public_key: signed.publicKey,
         signature: signed.signature,
         nonce: challenge.nonce,
@@ -56,6 +78,10 @@ async function loginWithWallet(wallet, opts = {}) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
     location.href = "/";
+  } catch (err) {
+    showErr(err);
+  } finally {
+    loginInFlight = false;
   }
 }
 
@@ -68,7 +94,27 @@ async function loadConnector() {
   connector = new NearConnector({
     network: config.auth.near_network || "mainnet",
   });
+  // Documented pattern: the connector announces wallet sign-in. Driving the
+  // login from this event means an approval always completes the login, even
+  // if the selection modal promise settles late or rejects when it closes.
+  connector.on("wallet:signIn", (payload) => {
+    if (payload && payload.wallet) completeLogin(payload.wallet);
+  });
   return connector;
+}
+
+async function connectedWalletOrNull() {
+  // Restore path (docs: getConnectedWallet during initialization).
+  try {
+    const connected = await connector.getConnectedWallet();
+    if (connected && connected.wallet) {
+      const accounts = connected.accounts || await connected.wallet.getAccounts().catch(() => []);
+      if (accounts && accounts.length) return connected.wallet;
+    }
+  } catch {
+    /* not connected */
+  }
+  return null;
 }
 
 /* --------------------------------------------------- wallet-selector fallback */
@@ -88,7 +134,9 @@ async function loadSelector() {
   selector.on("signedIn", async () => {
     try {
       const wallet = await selector.wallet();
-      if ((await wallet.getAccounts()).length) await loginWithWallet(wallet);
+      if ((await wallet.getAccounts().catch(() => [])).length) {
+        await completeLogin(wallet);
+      }
     } catch (err) {
       showErr(err);
     }
@@ -101,7 +149,7 @@ async function selectorFlow() {
   await loadSelector();
   const wallet = await selector.wallet().catch(() => null);
   if (wallet && (await wallet.getAccounts().catch(() => [])).length) {
-    await loginWithWallet(wallet);
+    await completeLogin(wallet);
     return;
   }
   if (!selectorModal) {
@@ -116,22 +164,13 @@ async function selectorFlow() {
 
 /* ----------------------------------------------------------------- entry */
 
-let connectPending = false;
-
 async function connectNearWallet() {
   const btn = document.getElementById("near-btn");
-  if (connectPending) return; // a connect() call is still awaiting the wallet
+  if (connectPending) return;
+  connectPending = true;
   try {
-    connectPending = true;
     btn.disabled = true;
     btn.textContent = "Opening wallet…";
-    // connect() only settles once a wallet is chosen; if the user dismisses
-    // the picker it stays pending, so recover the button after a grace period.
-    const recover = setTimeout(() => {
-      connectPending = false;
-      btn.disabled = false;
-      btn.textContent = "Connect NEAR Wallet";
-    }, 6000);
     let nearConnectReady = true;
     try {
       await loadConnector();
@@ -139,21 +178,36 @@ async function connectNearWallet() {
       nearConnectReady = false; // module/network unavailable -> fallback
     }
     if (!nearConnectReady) {
-      clearTimeout(recover);
       await selectorFlow();
       return;
     }
-    // connector.connect() opens the NEAR Connect wallet-selection modal.
-    const wallet = await connector.connect().catch(() => null);
-    clearTimeout(recover);
-    if (!wallet) return; // user dismissed the picker - stop quietly
-    await loginWithWallet(wallet);
-  } catch (err) {
-    if (String(err.message || err).includes("cancelled")) {
-      // wallet's own sign-in step cancelled - no error needed
+    // Already-approved wallet (e.g. user signed in previously)? Skip the
+    // picker and log straight in.
+    const existing = await connectedWalletOrNull();
+    if (existing) {
+      await completeLogin(existing);
       return;
     }
-    showErr(err);
+    // connector.connect() opens the NEAR Connect wallet-selection modal.
+    // If it settles null/rejects when the modal closes, the wallet:signIn
+    // event still completes the login; only surface an error when neither
+    // path fired. The race keeps the button from hanging on a dismissal
+    // (connect() only settles once a wallet is chosen).
+    let modalErr = null;
+    const wallet = await Promise.race([
+      connector.connect().catch((err) => {
+        modalErr = err;
+        return null;
+      }),
+      new Promise((resolve) => setTimeout(() => resolve(null), 9000)),
+    ]);
+    if (wallet) {
+      await completeLogin(wallet);
+    } else if (modalErr && !loginInFlight) {
+      // no signIn event either - show the real reason instead of silently
+      // leaving the user logged out
+      showErr(modalErr);
+    }
   } finally {
     connectPending = false;
     btn.disabled = false;
@@ -161,20 +215,37 @@ async function connectNearWallet() {
   }
 }
 
-// After a browser-wallet redirect round-trip the wallet account is persisted
-// but the nexscrow session is not yet issued: resume the signMessage login.
-async function autoResume() {
+// Restore an already-approved wallet after page reloads: if the wallet says
+// we are signed in but no nexscrow session cookie exists, complete the login.
+async function restoreSession() {
   try {
-    if (!localStorage.getItem("near-wallet-selector:wallets")) return;
-    await loadSelector();
-    const wallet = await selector.wallet().catch(() => null);
-    if (wallet && (await wallet.getAccounts().catch(() => [])).length) {
-      await loginWithWallet(wallet);
-    }
+    await loadConnector();
+    const wallet = await connectedWalletOrNull();
+    if (wallet) await completeLogin(wallet);
   } catch {
-    /* not signed in to a wallet; ignore */
+    /* wallet not connected; nothing to restore */
   }
 }
-if (!document.cookie.includes("nexscrow_session")) autoResume();
+
+if (!document.cookie.includes("nexscrow_session")) {
+  // defer so the landing page renders first
+  (window.requestIdleCallback || setTimeout)(() => restoreSession());
+  // legacy wallet-selector restore (redirect wallets persist their state)
+  (function autoResume() {
+    try {
+      if (!localStorage.getItem("near-wallet-selector:wallets")) return;
+      loadSelector()
+        .then(async () => {
+          const wallet = await selector.wallet().catch(() => null);
+          if (wallet && (await wallet.getAccounts().catch(() => [])).length) {
+            await completeLogin(wallet);
+          }
+        })
+        .catch(() => {});
+    } catch {
+      /* ignore */
+    }
+  })();
+}
 
 window.connectNearWallet = connectNearWallet;

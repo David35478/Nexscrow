@@ -71,15 +71,6 @@ async function loadConnector() {
   return connector;
 }
 
-async function nearConnectFlow() {
-  const conn = await loadConnector();
-  // connector.connect() opens the NEAR Connect wallet-selection modal and
-  // resolves with the connected wallet.
-  const wallet = await conn.connect();
-  if (!wallet) throw new Error("wallet connection cancelled");
-  await loginWithWallet(wallet);
-}
-
 /* --------------------------------------------------- wallet-selector fallback */
 
 async function loadSelector() {
@@ -125,21 +116,46 @@ async function selectorFlow() {
 
 /* ----------------------------------------------------------------- entry */
 
+let connectPending = false;
+
 async function connectNearWallet() {
   const btn = document.getElementById("near-btn");
+  if (connectPending) return; // a connect() call is still awaiting the wallet
   try {
+    connectPending = true;
     btn.disabled = true;
     btn.textContent = "Opening wallet…";
+    // connect() only settles once a wallet is chosen; if the user dismisses
+    // the picker it stays pending, so recover the button after a grace period.
+    const recover = setTimeout(() => {
+      connectPending = false;
+      btn.disabled = false;
+      btn.textContent = "Connect NEAR Wallet";
+    }, 6000);
+    let nearConnectReady = true;
     try {
-      await nearConnectFlow();
-    } catch (err) {
-      // NEAR Connect unavailable (network/module error) -> selector modal.
-      if (String(err.message || err).includes("cancelled")) throw err;
-      await selectorFlow();
+      await loadConnector();
+    } catch {
+      nearConnectReady = false; // module/network unavailable -> fallback
     }
+    if (!nearConnectReady) {
+      clearTimeout(recover);
+      await selectorFlow();
+      return;
+    }
+    // connector.connect() opens the NEAR Connect wallet-selection modal.
+    const wallet = await connector.connect().catch(() => null);
+    clearTimeout(recover);
+    if (!wallet) return; // user dismissed the picker - stop quietly
+    await loginWithWallet(wallet);
   } catch (err) {
+    if (String(err.message || err).includes("cancelled")) {
+      // wallet's own sign-in step cancelled - no error needed
+      return;
+    }
     showErr(err);
   } finally {
+    connectPending = false;
     btn.disabled = false;
     btn.textContent = "Connect NEAR Wallet";
   }

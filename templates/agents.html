@@ -107,7 +107,7 @@
       document.getElementById("hire-name").textContent = agent.display_name;
       document.getElementById("hire-form").dataset.agent = agentId;
       panel.hidden = false;
-      panel.scrollIntoView === undefined ? null : window.scrollTo({ top: panel.offsetTop - 90, behavior: "smooth" });
+      window.scrollTo({ top: panel.offsetTop - 90, behavior: "smooth" });
     }
 
     document.getElementById("hire-form").addEventListener("submit", async (e) => {

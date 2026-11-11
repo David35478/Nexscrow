@@ -203,7 +203,11 @@ def serialize_transfer_tx(
 
 
 def parse_private_key(private_key: str) -> tuple[bytes, bytes]:
-    """'ed25519:<base58>' (or bare base58) -> (seed, public_key bytes)."""
+    """'ed25519:<base58>' (or bare base58) -> (seed, public_key bytes).
+
+    Accepts both 32-byte seeds and the standard 64-byte NEAR secret keys
+    (seed || public key, as emitted by near-cli / wallet exports).
+    """
     from nacl.signing import SigningKey
 
     raw = private_key.strip()
@@ -212,10 +216,15 @@ def parse_private_key(private_key: str) -> tuple[bytes, bytes]:
         if scheme != "ed25519":
             raise NearChainError(f"unsupported key scheme '{scheme}' (need ed25519)")
         raw = rest
-    seed = b58decode(raw)
-    if len(seed) != 32:
-        raise NearChainError("ed25519 private key must be 32 bytes")
-    return seed, bytes(SigningKey(seed).verify_key)
+    decoded = b58decode(raw)
+    if len(decoded) == 64:
+        seed = decoded[:32]
+        if bytes(SigningKey(seed).verify_key) != decoded[32:]:
+            raise NearChainError("ed25519 secret key's public half does not match its seed")
+        return seed, decoded[32:]
+    if len(decoded) == 32:
+        return decoded, bytes(SigningKey(decoded).verify_key)
+    raise NearChainError("ed25519 private key must be 32 or 64 bytes")
 
 
 def transfer_near(
@@ -260,18 +269,34 @@ def transfer_near(
     )
     signature = SigningKey(seed).sign(hashlib.sha256(tx_bytes).digest()).signature
     signed_tx = tx_bytes + b"\x00" + signature  # Signature::ed25519
-    result = rpc(
-        "send_tx",
-        {
-            "signed_tx_base64": base64.b64encode(signed_tx).decode(),
-            "wait_until": "EXECUTED_OPTIMISTIC",
-        },
-        rpc_url,
-    )
+    # The tx hash is sha256 of the signed transaction, so we can always
+    # recover from a lost broadcast response instead of double-sending.
+    tx_hash = b58encode(hashlib.sha256(signed_tx).digest())
+    try:
+        result = rpc(
+            "send_tx",
+            {
+                "signed_tx_base64": base64.b64encode(signed_tx).decode(),
+                "wait_until": "FINAL",
+            },
+            rpc_url,
+        )
+    except NearChainError:
+        # The tx may have landed anyway; re-query before letting the caller
+        # retry, otherwise a retry would sign a second transfer.
+        try:
+            outcome = rpc(
+                "EXPERIMENTAL_tx_status",
+                {"tx_hash": tx_hash, "wait_until": "FINAL"},
+                rpc_url,
+            )
+        except NearChainError:
+            raise
+        result = outcome
     status = result.get("status") or {}
     if "Failure" in status:
         raise NearChainError(f"payout transaction failed on-chain: {status['Failure']}")
     return {
-        "tx_hash": (result.get("transaction_outcome") or {}).get("id"),
+        "tx_hash": (result.get("transaction_outcome") or {}).get("id") or tx_hash,
         "status": status,
     }

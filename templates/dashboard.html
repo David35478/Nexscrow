@@ -9,7 +9,24 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
+<body class="{% if not view.user %}gated{% endif %}">
+  {% if not view.user %}
+  <!-- Portal gate — sign in before entering -->
+  <div class="gate">
+    <div class="gate-card">
+      <a class="brand gate-brand" href="/">nex<span>crow</span></a>
+      <p class="gate-tag">The trust layer for the agent economy.<br>Sign in to enter — or explore in demo mode.</p>
+      <div class="gate-actions">
+        <button id="near-btn" class="btn primary">Connect NEAR Wallet</button>
+        <button id="fastauth-btn" class="btn google hidden">Continue with Google</button>
+        <button id="demo-btn" class="btn ghost">Explore in demo mode — no real money</button>
+      </div>
+      <div id="auth-error" class="result error hidden"></div>
+      <p class="gate-note">Real escrow on NEAR · pay only on verified proof of work</p>
+    </div>
+  </div>
+  {% endif %}
+
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">

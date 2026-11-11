@@ -1,4 +1,4 @@
-/* NEAR wallet + NEAR Auth (Google) login.
+/* NEAR wallet login.
    Wallet: NEAR Connect (@hot-labs/near-connect) per docs.near.org — the
    connector is initialized with features.signMessage so only wallets that
    support NEP-413 message signing appear. Login is driven by the
@@ -10,6 +10,7 @@
 
 let connector = null;   // NEAR Connect instance
 let fastAuthProvider = null;  // NEAR Auth provider
+
 let connectPending = false;
 let loginInFlight = false;
 
@@ -204,14 +205,18 @@ async function nearAuthLogin() {
         clientId: na.client_id,
       });
     }
-    // Popup Google login; resolves after Auth0 returns.
-    await fastAuthProvider.login();
-    // Raw token for the signing audience — verified by our backend against
-    // the Auth0 JWKS.
+    // Popup Google login for the signing audience directly: login() would
+    // only cache the default audience, forcing getTokenSilently through a
+    // hidden iframe — which fails when third-party cookies are blocked.
+    // Doing the popup authorize with the audience caches that token, so the
+    // getTokenSilently below resolves from cache without any iframe.
     const { FAST_AUTH_AUTH0_DEFAULTS } = await import(
       "https://esm.sh/@fast-auth-near/javascript-provider"
     );
     const audience = (FAST_AUTH_AUTH0_DEFAULTS[na.network] || {}).signingAudience;
+    await fastAuthProvider.client.loginWithPopup({
+      authorizationParams: { audience },
+    });
     const token = await fastAuthProvider.client.getTokenSilently({
       authorizationParams: { audience },
     });
@@ -362,6 +367,6 @@ if (!document.cookie.includes("nexscrow_session")) {
   (window.requestIdleCallback || setTimeout)(() => restoreSession());
 }
 
-window.connectNearWallet = connectNearWallet;
 window.nearAuthLogin = nearAuthLogin;
+window.connectNearWallet = connectNearWallet;
 window.payEscrow = payEscrow;

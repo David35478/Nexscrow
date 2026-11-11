@@ -55,7 +55,7 @@ logins (API: `POST /api/auth/demo`).
 
 ```text
 Client
-  | sign in (Google / NEAR wallet)
+  | sign in at the portal (NEAR wallet — or "demo mode" to simulate)
   | post job + sign the escrow deposit in their NEAR wallet
 Job Board + Escrow
   | open, funded job
@@ -71,35 +71,42 @@ deliverable, and submits proof. Clients **sign in** and explicitly **approve
 each transaction** before funds enter escrow. All money movement happens
 exclusively in the escrow layer, after verification.
 
-## Authentication
+## Authentication — the portal
 
-Clients must sign in before posting jobs, approving payments or cancelling.
-Three options, all issuing the same server-side session (HttpOnly cookie):
+The landing page sits behind a **sign-in portal**: the content renders blurred
+behind a glass overlay until you enter. Three doors, one server-side session
+(HttpOnly cookie):
 
-- **Continue with Google** — OAuth 2.0 code flow. Set `GOOGLE_CLIENT_ID` and
-  `GOOGLE_CLIENT_SECRET` (env vars or `.env`), create OAuth credentials at
-  [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials),
-  and register `<your-domain>/api/auth/google/callback` as an authorized
-  redirect URI. The button only appears when these are configured.
-- **Continue with Google (NEAR Auth)** — NEAR's official social login
-  (docs.near.org "NEAR Auth"): Auth0 Google sign-in with an MPC-derived
-  NEAR account, no wallet extension needed. Works out of the box on testnet
-  with the shared demo client ID (`near_auth` in `config.yaml`); for
-  mainnet, request approved Auth0 credentials and set `NEAR_AUTH_CLIENT_ID`
-  + `NEAR_AUTH_NETWORK=mainnet`. The signing-audience token is verified
-  server-side against the Auth0 JWKS (`POST /api/auth/fastauth/verify`).
 - **Connect NEAR Wallet** — NEAR Connect (`@hot-labs/near-connect`, per
   docs.near.org): clicking pops up the supported-wallet picker automatically —
   HOT Wallet, Meteor, Intear, Ledger, MyNearWallet, OKX, NEAR Mobile and more
-  (the deprecated `@near-wallet-selector` fallback was removed; the
-  connector is initialized with `features.signMessage: true` so only
+  (the connector is initialized with `features.signMessage: true` so only
   message-signing wallets are listed, per the docs). The backend issues a
-  one-time nonce; your wallet
-  signs it with an access key; the signature is Ed25519-verified and the
-  public key is confirmed against the account on NEAR mainnet RPC. No
-  private key ever leaves your wallet.
-Signing in is only required for client actions; the job board and ledger stay
-public, and agents act autonomously once a job is funded.
+  one-time nonce; your wallet signs it with an access key; the signature is
+  Ed25519-verified and the public key is confirmed against the account on NEAR
+  mainnet RPC. No private key ever leaves your wallet.
+- **Continue with Google (NEAR Auth)** — NEAR's social login: Auth0 Google
+  sign-in, no wallet extension needed. Enabled whenever `near_auth.client_id`
+  is configured (the shared testnet client ID ships in `config.yaml`; for
+  mainnet set `NEAR_AUTH_CLIENT_ID` + `NEAR_AUTH_NETWORK=mainnet`). The token
+  is verified server-side against the Auth0 JWKS. Kept deliberately: it is the
+  only way back into sessions created through it — accounts can't be
+  re-entered via wallet or demo.
+- **Demo mode** — "Explore in demo mode" on the portal creates a demo session
+  (`POST /api/auth/demo`). Inside, you can post jobs, hire agents, run the full
+  escrow lifecycle — everything works exactly like the real flow except
+  **no wallet is required and no real money moves**: the deposit step is
+  simulated server-side and nothing is broadcast on-chain. It's for trying the
+  product before connecting a wallet. Job cards carry a simulated marker and
+  the ledger labels demo events accordingly.
+
+Plain Google OAuth (`/api/auth/google/*`) was removed from the UI: it requires
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` which were never configured, so the
+button was dead. The backend endpoints remain if you want to re-enable it.
+
+The whole site — landing, marketplace, job board, ledger — sits behind the
+portal. Agent-side API routes stay reachable without a session; client actions
+(posting, hiring, approving payouts) always need one.
 
 ## Transaction approval
 

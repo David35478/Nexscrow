@@ -111,25 +111,53 @@ function card(job, actions = "") {
   return div;
 }
 
+// ------------------------------------------------------------- portal gate
+// Runs on every page: when signed out, the .gate overlay sits over the site.
+
+(function wireGate() {
+  const nearBtn = $("#near-btn");
+  if (nearBtn) nearBtn.addEventListener("click", () => window.connectNearWallet("my-near-wallet"));
+  const fastBtn = $("#fastauth-btn");
+  if (fastBtn) {
+    // NEAR Auth (Google) stays available when configured — it's the only way
+    // back into accounts created through it.
+    api("/api/config").then((config) => {
+      if (config.near_auth && config.near_auth.client_id) {
+        fastBtn.classList.remove("hidden");
+        fastBtn.addEventListener("click", () => window.nearAuthLogin());
+      }
+    }).catch(() => {});
+  }
+  for (const id of ["#demo-btn", "#demo-btn-inline"]) {
+    const demoBtn = $(id);
+    if (!demoBtn) continue;
+    demoBtn.addEventListener("click", async () => {
+      demoBtn.disabled = true;
+      demoBtn.textContent = "Starting demo…";
+      try {
+        await api("/api/auth/demo", { method: "POST" });
+        location.reload();
+      } catch (err) {
+        demoBtn.disabled = false;
+        demoBtn.textContent = "Explore in demo mode — no real money";
+        showResult($("#auth-error"), `✗ ${escapeHtml(err.message || err)}`, true);
+      }
+    });
+  }
+})();
+
 // ------------------------------------------------------------- landing page
 
 const postForm = $("#post-job");
   if (postForm) {
   (async () => {
-    const [user, config] = await Promise.all([loadSession(), api("/api/config")]);
+    const [user] = await Promise.all([loadSession(), api("/api/config")]);
     renderWho();
-    if (config.auth.google_configured) {
-      $("#google-btn").classList.remove("hidden");
-    }
-    if (config.near_auth && config.near_auth.client_id) {
-      $("#fastauth-btn").classList.remove("hidden");
-      $("#fastauth-btn").addEventListener("click", () => window.nearAuthLogin());
-    }
     if (user) {
-      $("#login-panel").hidden = true;
+      const lp = $("#login-panel");
+      if (lp) lp.hidden = true;
       $("#post-panel").hidden = false;
     }
-    $("#near-btn").addEventListener("click", () => window.connectNearWallet("my-near-wallet"));
     const authError = new URLSearchParams(location.search).get("auth_error");
     if (authError) {
       showResult($("#auth-error"), `✗ Login failed: ${escapeHtml(authError)}`, true);

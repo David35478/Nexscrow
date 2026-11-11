@@ -388,8 +388,9 @@ def create_app(
         return system.dispute(job_id, body.reason, client_id=user["user_id"])
 
     @app.post("/api/jobs/{job_id}/dispute/resolve")
-    async def resolve(job_id: str, body: ResolveDispute) -> dict:
-        return system.resolve(job_id, body.outcome)
+    async def resolve(job_id: str, body: ResolveDispute, request: Request) -> dict:
+        user = require_user(request)
+        return system.resolve(job_id, body.outcome, client_id=user["user_id"])
 
     @app.get("/api/reputation")
     async def reputation(agent_id: str | None = None) -> dict:

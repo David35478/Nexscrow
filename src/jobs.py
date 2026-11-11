@@ -16,6 +16,10 @@ class JobNotFound(Exception):
     pass
 
 
+class DepositReplayError(Exception):
+    """The deposit tx_hash already funded a different job."""
+
+
 class JobStore:
     def __init__(self, store: JsonStore):
         self._store = store
@@ -94,6 +98,23 @@ class JobStore:
     def list(self) -> list[dict]:
         jobs: Any = self._store.read(self._name, {})
         return sorted(jobs.values(), key=lambda j: j.get("created_at", ""), reverse=True)
+
+    def claim_deposit(self, job_id: str, tx_hash: str, **fields: Any) -> dict:
+        """Atomically bind a deposit tx to a job; raises DepositReplayError
+        when any other job already consumed it."""
+
+        def mutate(jobs: dict) -> dict:
+            if job_id not in jobs:
+                raise JobNotFound(job_id)
+            for other_id, other in jobs.items():
+                if other_id != job_id and other.get("deposit_tx_hash") == tx_hash:
+                    raise DepositReplayError(
+                        "this transaction already funded another job"
+                    )
+            jobs[job_id].update(fields)
+            return jobs[job_id]
+
+        return self._store.update(self._name, {}, mutate)
 
     def update(self, job_id: str, **fields: Any) -> dict:
         if "status" in fields and fields["status"] not in STATUSES:

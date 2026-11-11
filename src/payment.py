@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 
 from src.constraints import Constraints
-from src.jobs import JobStore
+from src.jobs import DepositReplayError, JobStore
 from src.ledger import Ledger
 from src import near_chain
 from src.storage import utcnow
@@ -74,8 +74,12 @@ class PaymentLayer:
         if job["payment_status"] != "pending":
             raise PaymentError(f"job {job['job_id']} deposit is already '{job['payment_status']}'")
         price = self._price()
-        amount_yocto = near_chain.usd_to_yocto(job["reward_usd"], price)
-        jobs.update(job["job_id"], deposit_expected_yocto=str(amount_yocto))
+        # Reuse the stored quote: a client may have already signed at it, so
+        # re-pricing after NEAR moves would strand a valid transfer.
+        stored = job.get("deposit_expected_yocto")
+        amount_yocto = int(stored) if stored else near_chain.usd_to_yocto(job["reward_usd"], price)
+        if not stored:
+            jobs.update(job["job_id"], deposit_expected_yocto=str(amount_yocto))
         return {
             "receiver_id": self.escrow_account(),
             "amount_yocto": str(amount_yocto),
@@ -99,10 +103,6 @@ class PaymentLayer:
             raise PaymentError(f"job {job['job_id']} deposit is already '{job['payment_status']}'")
         if not tx_hash:
             raise PaymentError("tx_hash is required")
-        # replay protection: one deposit transaction funds exactly one job
-        for other in jobs.list():
-            if other.get("deposit_tx_hash") == tx_hash:
-                raise PaymentError("this transaction already funded another job")
         expected = job.get("deposit_expected_yocto")
         if expected is None:
             prepared = self.prepare_deposit(job, jobs)
@@ -115,13 +115,19 @@ class PaymentLayer:
             int(expected),
             expected_signer=signer,
         )
-        updated = jobs.update(
-            job["job_id"],
-            payment_status="locked",
-            deposit_tx_hash=tx_hash,
-            deposit_paid_yocto=str(result["paid_yocto"]),
-            client_account=result["signer_id"],
-        )
+        # Atomic claim: the replay check and the lock write happen inside one
+        # store update, so two concurrent confirms can't both pass.
+        try:
+            updated = jobs.claim_deposit(
+                job["job_id"],
+                tx_hash,
+                payment_status="locked",
+                deposit_tx_hash=tx_hash,
+                deposit_paid_yocto=str(result["paid_yocto"]),
+                client_account=result["signer_id"],
+            )
+        except DepositReplayError as exc:
+            raise PaymentError(str(exc)) from exc
         ledger.append(
             "deposit_locked",
             job_id=job["job_id"],
@@ -180,6 +186,8 @@ class PaymentLayer:
     def release(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Pay the agent and collect the protocol fee."""
         payout, fee = self.c.payout_split(job["reward_usd"])
+        if job["payment_status"] == "released" or job.get("payout_tx_hash"):
+            raise PaymentError(f"job {job['job_id']} is already released")
         payout_tx = None
         if self._simulated(job):
             mode = "simulated"
@@ -220,7 +228,19 @@ class PaymentLayer:
         )
 
     def refund(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
-        """Return locked funds to the client."""
+        """Return locked funds to the client.
+
+        Live funds may only be refunded while locked: once released, the
+        payout tx is already on-chain and refunding would spend the pooled
+        escrow a second time.
+        """
+        if job["payment_status"] == "refunded":
+            raise PaymentError(f"job {job['job_id']} is already refunded")
+        if job["payment_status"] != "locked" and not self._simulated(job):
+            raise PaymentError(
+                f"job {job['job_id']} funds are '{job['payment_status']}',"
+                " not locked in escrow"
+            )
         refund_tx = None
         if self._simulated(job):
             mode = "simulated"

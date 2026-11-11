@@ -120,6 +120,10 @@ class NexscrowSystem:
             job_id=job_id,
             details=f"client signed deposit tx {tx_hash}",
         )
+        # A wallet-signed-in client must have signed the tx themselves —
+        # never let the request bind someone else's transfer to this job.
+        if client_id and client_id.startswith("near:"):
+            signer_id = client_id.removeprefix("near:")
         return self.payment.confirm_deposit(
             job, self.jobs, self.ledger, tx_hash, signer_id
         )
@@ -227,11 +231,17 @@ class NexscrowSystem:
             raise ConstraintError("only the client who posted this job can dispute it")
         return open_dispute(job, reason, self.jobs, self.ledger)
 
-    def resolve(self, job_id: str, outcome: str) -> dict:
+    def resolve(self, job_id: str, outcome: str, client_id: str | None = None) -> dict:
         job = self.jobs.get(job_id)
-        updated = resolve_dispute(job, outcome, self.jobs, self.ledger)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError(
+                "only the client who posted this job can resolve its dispute"
+            )
+        # Move funds first: if the refund fails the dispute stays unresolved.
         if outcome == "refund":
             self.payment.refund(job, self.jobs, self.ledger)
+        resolve_dispute(job, outcome, self.jobs, self.ledger)
+        if outcome == "refund":
             ledger_note = "dispute resolved: funds returned to the client"
         else:
             ledger_note = "dispute resolved: payout to the agent stands"

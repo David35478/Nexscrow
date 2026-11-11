@@ -42,6 +42,8 @@ function renderWho() {
     $("#logout-link").addEventListener("click", async (e) => {
       e.preventDefault();
       await api("/api/auth/logout", { method: "POST" });
+      // Logout is explicit — don't let restoreSession reprompt the wallet.
+      try { sessionStorage.setItem("nex_wallet_restore_tries", "2"); } catch (_) {}
       location.reload();
     });
   } else {

@@ -135,8 +135,10 @@ async function connectNearWallet() {
   if (connectPending) return;
   connectPending = true;
   try {
-    btn.disabled = true;
-    btn.textContent = "Opening wallet…";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Opening wallet…";
+    }
     await loadConnector();
     const existing = await connectedWalletOrNull();
     if (existing) {
@@ -153,17 +155,29 @@ async function connectNearWallet() {
     if (wallet && !loginInFlight) await completeLogin(wallet);
   } finally {
     connectPending = false;
-    btn.disabled = false;
-    btn.textContent = "Connect NEAR Wallet";
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Connect NEAR Wallet";
+    }
   }
 }
 
-// Restore an approved wallet on load (no session cookie yet).
+// Restore an approved wallet on load (no session cookie yet). Retrying the
+// signature on every page spammed wallets (browser wallets redirect per
+// prompt), so attempt at most twice per tab session — enough to recover
+// from an expired challenge or a cookie that lapsed mid-tab, without
+// re-prompting forever after a dismissal.
 async function restoreSession() {
   try {
     await loadConnector();
     const wallet = await connectedWalletOrNull();
-    if (wallet) await completeLogin(wallet);
+    if (!wallet) return;
+    const attempts = Number(
+      sessionStorage.getItem("nex_wallet_restore_tries") || 0
+    );
+    if (attempts >= 2) return;
+    sessionStorage.setItem("nex_wallet_restore_tries", String(attempts + 1));
+    await completeLogin(wallet);
   } catch {
     /* wallet not connected */
   }

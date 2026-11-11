@@ -797,3 +797,60 @@ details pre {
   .bento-4 { grid-template-columns: 1fr; }
   .hero-metrics { gap: var(--s3); }
 }
+
+/* ── Portal gate (sign-in before entering) ────────────────── */
+body.gated { overflow: hidden; }
+.gate {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgb(245 244 240 / 55%);
+  backdrop-filter: blur(22px) saturate(1.15);
+  -webkit-backdrop-filter: blur(22px) saturate(1.15);
+}
+.gate-card {
+  background: rgb(255 255 255 / 80%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgb(255 255 255 / 70%);
+  border-radius: 24px;
+  box-shadow: 0 24px 80px rgb(17 17 17 / 14%);
+  padding: 44px 40px 32px;
+  max-width: 420px; width: 100%;
+  text-align: center;
+}
+.gate-brand { justify-content: center; font-size: 26px; }
+.gate-tag {
+  margin: 14px 0 26px !important;
+  font-size: 14.5px; color: var(--ink-3); line-height: 1.6;
+}
+.gate-actions { display: flex; flex-direction: column; gap: 10px; }
+.gate-actions .btn { width: 100%; justify-content: center; }
+.gate-note {
+  margin: 22px 0 0 !important;
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-4);
+}
+.gate .result { margin-top: 14px; text-align: left; }
+
+/* ── Cards with masked image tops (glass fade into card) ──── */
+.bento-media { display: flex; flex-direction: column; min-height: 320px; }
+.bento-img-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 52%; pointer-events: none;
+}
+.bento-img-top img {
+  width: 100%; height: 100%;
+  object-fit: cover; object-position: center 28%;
+  opacity: 0.9;
+  mask-image: linear-gradient(to bottom, black 0%, black 18%, transparent 92%);
+  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 18%, transparent 92%);
+}
+.bento-media .bento-step-body {
+  position: relative; z-index: 1;
+  margin-top: auto;
+  padding-top: 150px;
+}
+.bento-media .step-num {
+  position: relative; z-index: 1;
+}

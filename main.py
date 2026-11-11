@@ -142,18 +142,22 @@ def create_app(
 
     @app.get("/")
     async def index(request: Request):
+        view = system.public_view()
+        view["user"] = current_user(request)
         return templates.TemplateResponse(
             request=request,
             name="index.html",
-            context={"view": system.public_view()},
+            context={"view": view},
         )
 
     @app.get("/dashboard")
     async def dashboard(request: Request):
+        view = system.public_view()
+        view["user"] = current_user(request)
         return templates.TemplateResponse(
             request=request,
             name="dashboard.html",
-            context={"view": system.public_view()},
+            context={"view": view},
         )
 
     @app.get("/job/{job_id}")
@@ -162,10 +166,12 @@ def create_app(
             system.jobs.get(job_id)
         except JobNotFound:
             raise HTTPException(status_code=404, detail="job not found")
+        view = system.public_view()
+        view["user"] = current_user(request)
         return templates.TemplateResponse(
             request=request,
             name="job_detail.html",
-            context={"view": system.public_view(), "job_id": job_id},
+            context={"view": view, "job_id": job_id},
         )
 
     @app.get("/near-callback")
@@ -178,10 +184,12 @@ def create_app(
 
     @app.get("/agents")
     async def agents_page(request: Request):
+        view = system.public_view()
+        view["user"] = current_user(request)
         return templates.TemplateResponse(
             request=request,
             name="agents.html",
-            context={"view": system.public_view()},
+            context={"view": view},
         )
 
     # -------------------------------------------------------------- api

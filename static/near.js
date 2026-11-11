@@ -1,4 +1,4 @@
-/* NEAR wallet + NEAR Auth (Google) login.
+/* NEAR wallet login.
    Wallet: NEAR Connect (@hot-labs/near-connect) per docs.near.org — the
    connector is initialized with features.signMessage so only wallets that
    support NEP-413 message signing appear. Login is driven by the
@@ -9,7 +9,7 @@
    server-side against the Auth0 JWKS. */
 
 let connector = null;   // NEAR Connect instance
-let fastAuthProvider = null;  // NEAR Auth provider
+
 let connectPending = false;
 let loginInFlight = false;
 
@@ -183,54 +183,6 @@ async function restoreSession() {
   }
 }
 
-/* ------------------------------------------ NEAR Auth (Google login) */
-
-async function nearAuthLogin() {
-  const btn = document.getElementById("fastauth-btn");
-  try {
-    btn.disabled = true;
-    btn.textContent = "Opening Google…";
-    const config = await getConfig();
-    const na = config.near_auth;
-    if (!na || !na.client_id) {
-      throw new Error("NEAR Auth is not configured");
-    }
-    if (!fastAuthProvider) {
-      const { JavascriptProvider } = await import(
-        "https://esm.sh/@fast-auth-near/javascript-provider"
-      );
-      fastAuthProvider = new JavascriptProvider({
-        network: na.network || "testnet",
-        clientId: na.client_id,
-      });
-    }
-    // Popup Google login; resolves after Auth0 returns.
-    await fastAuthProvider.login();
-    // Raw token for the signing audience — verified by our backend against
-    // the Auth0 JWKS.
-    const { FAST_AUTH_AUTH0_DEFAULTS } = await import(
-      "https://esm.sh/@fast-auth-near/javascript-provider"
-    );
-    const audience = (FAST_AUTH_AUTH0_DEFAULTS[na.network] || {}).signingAudience;
-    const token = await fastAuthProvider.client.getTokenSilently({
-      authorizationParams: { audience },
-    });
-    const res = await fetch("/api/auth/fastauth/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, network: na.network || "testnet" }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
-    location.href = "/";
-  } catch (err) {
-    showErr(err);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Continue with Google";
-  }
-}
-
 /* ------------------------------------------------- escrow deposits
    Live deposits are real on-chain transfers: we ask the connected wallet
    to sign a Transfer of NEAR to the escrow account, then the backend
@@ -363,5 +315,4 @@ if (!document.cookie.includes("nexscrow_session")) {
 }
 
 window.connectNearWallet = connectNearWallet;
-window.nearAuthLogin = nearAuthLogin;
 window.payEscrow = payEscrow;

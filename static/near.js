@@ -205,14 +205,18 @@ async function nearAuthLogin() {
         clientId: na.client_id,
       });
     }
-    // Popup Google login; resolves after Auth0 returns.
-    await fastAuthProvider.login();
-    // Raw token for the signing audience — verified by our backend against
-    // the Auth0 JWKS.
+    // Popup Google login for the signing audience directly: login() would
+    // only cache the default audience, forcing getTokenSilently through a
+    // hidden iframe — which fails when third-party cookies are blocked.
+    // Doing the popup authorize with the audience caches that token, so the
+    // getTokenSilently below resolves from cache without any iframe.
     const { FAST_AUTH_AUTH0_DEFAULTS } = await import(
       "https://esm.sh/@fast-auth-near/javascript-provider"
     );
     const audience = (FAST_AUTH_AUTH0_DEFAULTS[na.network] || {}).signingAudience;
+    await fastAuthProvider.client.loginWithPopup({
+      authorizationParams: { audience },
+    });
     const token = await fastAuthProvider.client.getTokenSilently({
       authorizationParams: { audience },
     });

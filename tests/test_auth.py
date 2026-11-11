@@ -152,6 +152,24 @@ def test_decode_strips_scheme_prefix():
         _decode_key_or_sig("!!!not-a-key!!!")
 
 
+def test_decode_all_base64_variants_exact():
+    """Signatures arrive padded/unpadded, standard/urlsafe alphabets.
+    Python's b64decode accepts -/_ as +/ , so naive validate=True decoding
+    corrupts urlsafe input; the decoder must separate alphabets exactly."""
+    import base64 as b64
+
+    from src.auth import _decode_key_or_sig
+
+    sig = bytes(range(64))
+    for enc in (
+        b64.b64encode(sig).decode(),
+        b64.b64encode(sig).decode().rstrip("="),
+        b64.urlsafe_b64encode(sig).decode(),
+        b64.urlsafe_b64encode(sig).decode().rstrip("="),
+    ):
+        assert _decode_key_or_sig(enc) == sig, enc[:12]
+
+
 def test_near_login_rejects_bad_signature(tmp_path):
     auth = make_auth(tmp_path)
     challenge = auth.issue_challenge()

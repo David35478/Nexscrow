@@ -58,13 +58,17 @@ def _decode_key_or_sig(value: str) -> bytes:
         return _b58_decode(value)
     except (AuthError, ValueError):
         pass
-    # base64 (standard or url-safe), possibly unpadded; strict validation so a
-    # wrong encoding fails cleanly instead of producing garbage bytes.
-    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
-        try:
-            return decoder(value + "=" * (-len(value) % 4), validate=True)
-        except Exception:
-            continue
+    # base64 (standard or url-safe), possibly unpadded. Python's b64decode
+    # accepts -/_ as if they were +/ , so a urlsafe string decoded with the
+    # standard alphabet would silently corrupt: check the alphabet explicitly.
+    import re
+
+    if re.fullmatch(r"[A-Za-z0-9+/\-_]+={0,2}", value):
+        for alphabet in (base64.urlsafe_b64decode, base64.b64decode):
+            try:
+                return alphabet(value + "=" * (-len(value) % 4))
+            except Exception:
+                continue
     raise AuthError("unrecognized signature/public key encoding")
 
 

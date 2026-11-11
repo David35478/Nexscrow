@@ -117,14 +117,31 @@ function card(job, actions = "") {
 (function wireGate() {
   const nearBtn = $("#near-btn");
   if (nearBtn) nearBtn.addEventListener("click", () => window.connectNearWallet("my-near-wallet"));
+  const fastBtn = $("#fastauth-btn");
+  if (fastBtn) {
+    // NEAR Auth (Google) stays available when configured — it's the only way
+    // back into accounts created through it.
+    api("/api/config").then((config) => {
+      if (config.near_auth && config.near_auth.client_id) {
+        fastBtn.classList.remove("hidden");
+        fastBtn.addEventListener("click", () => window.nearAuthLogin());
+      }
+    }).catch(() => {});
+  }
   for (const id of ["#demo-btn", "#demo-btn-inline"]) {
     const demoBtn = $(id);
     if (!demoBtn) continue;
     demoBtn.addEventListener("click", async () => {
       demoBtn.disabled = true;
       demoBtn.textContent = "Starting demo…";
-      await api("/api/auth/demo", { method: "POST" });
-      location.reload();
+      try {
+        await api("/api/auth/demo", { method: "POST" });
+        location.reload();
+      } catch (err) {
+        demoBtn.disabled = false;
+        demoBtn.textContent = "Explore in demo mode — no real money";
+        showResult($("#auth-error"), `✗ ${escapeHtml(err.message || err)}`, true);
+      }
     });
   }
 })();

@@ -162,16 +162,22 @@ async function connectNearWallet() {
   }
 }
 
-// Restore an approved wallet on load (no session cookie yet). Runs once per
-// tab session — re-running on every page made wallets prompt a signature
-// (or a redirect for browser wallets) on each navigation.
+// Restore an approved wallet on load (no session cookie yet). Retrying the
+// signature on every page spammed wallets (browser wallets redirect per
+// prompt), so attempt at most twice per tab session — enough to recover
+// from an expired challenge or a cookie that lapsed mid-tab, without
+// re-prompting forever after a dismissal.
 async function restoreSession() {
-  if (sessionStorage.getItem("nex_wallet_restored")) return;
-  sessionStorage.setItem("nex_wallet_restored", "1");
   try {
     await loadConnector();
     const wallet = await connectedWalletOrNull();
-    if (wallet) await completeLogin(wallet);
+    if (!wallet) return;
+    const attempts = Number(
+      sessionStorage.getItem("nex_wallet_restore_tries") || 0
+    );
+    if (attempts >= 2) return;
+    sessionStorage.setItem("nex_wallet_restore_tries", String(attempts + 1));
+    await completeLogin(wallet);
   } catch {
     /* wallet not connected */
   }

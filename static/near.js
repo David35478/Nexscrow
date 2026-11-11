@@ -50,48 +50,70 @@ async function loadConnector() {
   return connector;
 }
 
+async function primaryAccountOf(wallet) {
+  try {
+    const accounts = await wallet.getAccounts();
+    return accounts && accounts.length ? accounts[0].accountId : null;
+  } catch {
+    return null;
+  }
+}
+
 async function completeLogin(wallet) {
   // The signIn event and the connect() promise can both fire for one login.
   if (loginInFlight) return;
   loginInFlight = true;
   try {
-    const accounts = await wallet.getAccounts().catch(() => []);
-    const accountId = accounts && accounts.length ? accounts[0].accountId : null;
+    const accountId = await primaryAccountOf(wallet);
     if (!accountId) throw new Error("wallet returned no account");
-    const challenge = await fetch("/api/auth/near/init", { method: "POST" })
-      .then((r) => r.json());
-    const signArgs = {
-      message: challenge.message,
-      recipient: location.hostname,
-      nonce: b64urlToBytes(challenge.nonce),
-    };
-    if (wallet.type === "browser") {
-      signArgs.callbackUrl =
-        `${location.origin}/near-callback?challenge=${challenge.nonce}`;
-      await wallet.signMessage(signArgs);
-      return;
-    }
-    const signed = await wallet.signMessage(signArgs);
-    const res = await fetch("/api/auth/near/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        account_id: accountId,
-        public_key: signed.publicKey,
-        signature: signed.signature,
-        nonce: challenge.nonce,
-        recipient: location.hostname,
-        callback_url: null,
-      }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
-    location.href = "/";
+    await signAndVerify(wallet, accountId, 0);
   } catch (err) {
     showErr(err);
   } finally {
     loginInFlight = false;
   }
+}
+
+// One signMessage + backend verification. A burned/expired challenge used to
+// dead-end the user ("request expired or already used"); on that error we
+// fetch a fresh challenge and retry once before giving up.
+async function signAndVerify(wallet, accountId, attempt) {
+  const challenge = await fetch("/api/auth/near/init", { method: "POST" })
+  .then((r) => r.json());
+  const signArgs = {
+    message: challenge.message,
+    recipient: location.hostname,
+    nonce: b64urlToBytes(challenge.nonce),
+  };
+  if (wallet.type === "browser") {
+    signArgs.callbackUrl =
+      `${location.origin}/near-callback?challenge=${challenge.nonce}`;
+    await wallet.signMessage(signArgs);
+    return;
+  }
+  const signed = await wallet.signMessage(signArgs);
+  const res = await fetch("/api/auth/near/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      account_id: accountId,
+      public_key: signed.publicKey,
+      signature: signed.signature,
+      nonce: challenge.nonce,
+      recipient: location.hostname,
+      callback_url: null,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.error || data.detail || res.statusText;
+    if (attempt < 1 && /expired|challenge/i.test(msg)) {
+      return signAndVerify(wallet, accountId, attempt + 1);
+    }
+    throw new Error(msg);
+  }
+  // wallet connected -> open the dashboard
+  location.href = "/dashboard";
 }
 
 async function connectedWalletOrNull() {

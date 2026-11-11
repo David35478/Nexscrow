@@ -44,10 +44,17 @@
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
         status.textContent = `✓ Signed in as ${data.user.name}. Redirecting…`;
-        setTimeout(() => (location.href = "/"), 1200);
+        setTimeout(() => (location.href = "/dashboard"), 1200);
       } catch (err) {
         status.classList.add("error");
-        status.textContent = `✗ ${err.message}`;
+        if (/expired|challenge/i.test(err.message)) {
+          // burned nonce: the home page's restore auto-completes the login
+          // with a fresh challenge since the wallet is already connected
+          status.textContent = "Login challenge expired — retrying…";
+          setTimeout(() => (location.href = "/"), 900);
+        } else {
+          status.textContent = `✗ ${err.message}`;
+        }
       }
     }
   </script>

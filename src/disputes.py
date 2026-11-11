@@ -42,14 +42,19 @@ def open_dispute(
     return jobs.update(job["job_id"], disputed=True, dispute_reason=reason)
 
 
-def resolve_dispute(
-    job: dict, outcome: str, jobs: JobStore, ledger: Ledger
-) -> dict:
-    """Resolve a dispute: 'refund' returns funds, 'uphold' pays the agent."""
+def assert_resolvable(job: dict, outcome: str) -> None:
+    """Check a dispute can be resolved before any money moves."""
     if not job.get("disputed"):
         raise ConstraintError("this job has no open dispute")
     if job.get("dispute_resolved"):
         raise ConstraintError("this dispute is already resolved")
     if outcome not in ("refund", "uphold"):
         raise ConstraintError("outcome must be 'refund' or 'uphold'")
+
+
+def resolve_dispute(
+    job: dict, outcome: str, jobs: JobStore, ledger: Ledger
+) -> dict:
+    """Resolve a dispute: 'refund' returns funds, 'uphold' pays the agent."""
+    assert_resolvable(job, outcome)
     return jobs.update(job["job_id"], dispute_resolved=True, dispute_outcome=outcome)

@@ -359,3 +359,25 @@ def test_transfer_near_recovers_lost_response(make_system, monkeypatch):
     )
     assert result["tx_hash"] == "landed-tx"
     assert calls.count("send_tx") == 1  # never retried
+
+
+def test_resolve_refund_without_dispute_moves_no_money(make_system, monkeypatch):
+    """resolve('refund') on a non-disputed job must not refund the deposit."""
+    sys_ = make_system()
+    job = sys_.post_job("Live", "", 3.0, client_id="near:alice.near", simulated=False)
+    sys_.jobs.update(
+        job["job_id"], payment_status="locked",
+        client_account="alice.near", deposit_paid_yocto="600000000000000000000000",
+    )
+    sent = []
+    monkeypatch.setenv("ESCROW_PRIVATE_KEY", f"ed25519:{b58encode(bytes(range(1, 33)))}")
+    monkeypatch.setattr(
+        near_chain, "transfer_near",
+        lambda *a, **k: sent.append(a) or {"tx_hash": "x", "status": {}},
+    )
+    from src.constraints import ConstraintError
+
+    with pytest.raises(ConstraintError, match="no open dispute"):
+        sys_.resolve(job["job_id"], "refund", client_id="near:alice.near")
+    assert sent == []  # no transfer was broadcast
+    assert sys_.jobs.get(job["job_id"])["payment_status"] == "locked"

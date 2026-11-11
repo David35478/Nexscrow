@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from src.agent import WorkEngine
 from src.agent_api import AgentApiClient
 from src.constraints import ConstraintError, Constraints
-from src.disputes import open_dispute, resolve_dispute
+from src.disputes import assert_resolvable, open_dispute, resolve_dispute
 from src.escrow import Escrow
 from src.jobs import JobStore
 from src.ledger import Ledger
@@ -237,7 +237,9 @@ class NexscrowSystem:
             raise ConstraintError(
                 "only the client who posted this job can resolve its dispute"
             )
-        # Move funds first: if the refund fails the dispute stays unresolved.
+        # Validate the dispute before moving funds; run the refund before
+        # marking resolved so a failed refund doesn't strand it.
+        assert_resolvable(job, outcome)
         if outcome == "refund":
             self.payment.refund(job, self.jobs, self.ledger)
         resolve_dispute(job, outcome, self.jobs, self.ledger)

@@ -40,9 +40,13 @@ def test_quote_recipient_uses_escrow_account(make_system):
     assert sys_.constraints.escrow["account"] == "yurrri.near"
 
 
-def test_live_mode_refuses_release_without_real_payout(tmp_path):
+def test_live_mode_refuses_release_without_real_payout(tmp_path, monkeypatch):
     from src.payment import PaymentError
     import yaml
+
+    # The dev environment may have a real ESCROW_PRIVATE_KEY exported (.env);
+    # this test asserts the refuses-without-key path, so clear it.
+    monkeypatch.delenv("ESCROW_PRIVATE_KEY", raising=False)
 
     cfg = {
         **{k: v for k, v in BASE_CONFIG.items() if k != "demo_mode"},

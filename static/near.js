@@ -135,8 +135,10 @@ async function connectNearWallet() {
   if (connectPending) return;
   connectPending = true;
   try {
-    btn.disabled = true;
-    btn.textContent = "Opening wallet…";
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Opening wallet…";
+    }
     await loadConnector();
     const existing = await connectedWalletOrNull();
     if (existing) {
@@ -153,13 +155,19 @@ async function connectNearWallet() {
     if (wallet && !loginInFlight) await completeLogin(wallet);
   } finally {
     connectPending = false;
-    btn.disabled = false;
-    btn.textContent = "Connect NEAR Wallet";
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Connect NEAR Wallet";
+    }
   }
 }
 
-// Restore an approved wallet on load (no session cookie yet).
+// Restore an approved wallet on load (no session cookie yet). Runs once per
+// tab session — re-running on every page made wallets prompt a signature
+// (or a redirect for browser wallets) on each navigation.
 async function restoreSession() {
+  if (sessionStorage.getItem("nex_wallet_restored")) return;
+  sessionStorage.setItem("nex_wallet_restored", "1");
   try {
     await loadConnector();
     const wallet = await connectedWalletOrNull();

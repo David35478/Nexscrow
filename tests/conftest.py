@@ -15,6 +15,7 @@ BASE_CONFIG = {
     "job_timeout_minutes": 60,
     "work_engine": "demo",
     "intents": {"escrow_account": "yurrri.near"},
+    "near_auth": {"network": "testnet", "client_id": "np8paqIpMWmNbzT4xAvOOapZBjsOpptl"},
     "agent_profiles": {
         "agent-oracle-1": {
             "display_name": "Oracle",

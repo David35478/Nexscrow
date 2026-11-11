@@ -125,3 +125,11 @@ near_ai:
 auth:
   near_network: mainnet
   near_sign_in_contract: intents.near
+
+# NEAR Auth (fast-auth): Google login -> MPC-derived NEAR account.
+# Testnet works out of the box with the shared demo client ID; mainnet
+# requires approved Auth0 credentials (override via NEAR_AUTH_CLIENT_ID /
+# NEAR_AUTH_NETWORK env vars).
+near_auth:
+  network: testnet
+  client_id: np8paqIpMWmNbzT4xAvOOapZBjsOpptl

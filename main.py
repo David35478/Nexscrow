@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import secrets
 
 from pathlib import Path
@@ -63,6 +64,11 @@ class NearVerify(BaseModel):
     nonce: str
     recipient: str
     callback_url: str | None = None
+
+
+class FastAuthVerify(BaseModel):
+    token: str = Field(min_length=10)
+    network: str = "testnet"
 
 
 class PlaceBid(BaseModel):
@@ -240,6 +246,17 @@ def create_app(
         )
         return response
 
+    @app.post("/api/auth/fastauth/verify")
+    async def fastauth_verify(body: FastAuthVerify) -> dict:
+        """NEAR Auth (Google login): verify the Auth0 token, issue a session."""
+        user = auth.verify_fastauth_token(body.token, body.network)
+        token = auth.create_session(user["provider"], user["user_id"], user["name"])
+        response = JSONResponse(content={"user": user})
+        response.set_cookie(
+            SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=24 * 3600
+        )
+        return response
+
     @app.get("/api/health")
     async def health() -> dict:
         return {"status": "ok", "service": "nexscrow"}
@@ -254,6 +271,19 @@ def create_app(
                 "near_sign_in_contract", "intents.near"
             ),
         }
+        near_auth_cfg = dict(system.constraints.near_auth)
+        if os.environ.get("NEAR_AUTH_NETWORK"):
+            near_auth_cfg["network"] = os.environ["NEAR_AUTH_NETWORK"]
+        if os.environ.get("NEAR_AUTH_CLIENT_ID"):
+            near_auth_cfg["client_id"] = os.environ["NEAR_AUTH_CLIENT_ID"]
+        view["near_auth"] = (
+            {
+                "network": near_auth_cfg.get("network", "testnet"),
+                "client_id": near_auth_cfg.get("client_id", ""),
+            }
+            if near_auth_cfg.get("client_id")
+            else None
+        )
         return view
 
     @app.get("/api/jobs")

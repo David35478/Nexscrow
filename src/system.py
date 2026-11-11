@@ -15,7 +15,7 @@ from src.jobs import JobStore
 from src.ledger import Ledger
 from src.payment import PaymentLayer
 from src.reputation import agent_stats, all_agent_stats
-from src.storage import JsonStore, utcnow
+from src.storage import create_store, utcnow
 
 
 def _dt(value: str) -> datetime:
@@ -25,7 +25,7 @@ def _dt(value: str) -> datetime:
 class NexscrowSystem:
     def __init__(self, config_path: str = "config.yaml", data_dir: str | None = None):
         self.constraints = Constraints(config_path)
-        self.store = JsonStore(data_dir)
+        self.store = create_store(data_dir)
         self.ledger = Ledger(self.store)
         self.jobs = JobStore(self.store)
         self.payment = PaymentLayer(self.constraints)
@@ -76,7 +76,10 @@ class NexscrowSystem:
             simulated=simulated,
         )
         job["deposit_address"] = self.payment.create_deposit_address(job)
-        self.jobs.update(job["job_id"], deposit_address=job["deposit_address"])
+        updates = {"deposit_address": job["deposit_address"]}
+        if client_id and client_id.startswith("near:"):
+            updates["client_account"] = client_id.removeprefix("near:")
+        self.jobs.update(job["job_id"], **updates)
         self.ledger.append(
             "job_posted",
             job_id=job["job_id"],
@@ -97,6 +100,29 @@ class NexscrowSystem:
             details=f"client approved the ${job['reward_usd']:.2f} deposit",
         )
         return self.payment.lock_deposit(job, self.jobs, self.ledger)
+
+    def prepare_deposit(self, job_id: str, client_id: str | None = None) -> dict:
+        """Return the wallet-payable deposit quote for a live job."""
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can fund it")
+        return self.payment.prepare_deposit(job, self.jobs)
+
+    def confirm_deposit(
+        self, job_id: str, tx_hash: str, signer_id: str, client_id: str | None = None
+    ) -> dict:
+        """Verify the client's wallet-signed deposit on-chain and lock escrow."""
+        job = self.jobs.get(job_id)
+        if job.get("client_id") and client_id and job["client_id"] != client_id:
+            raise ConstraintError("only the client who posted this job can fund it")
+        self.ledger.append(
+            "deposit_approved",
+            job_id=job_id,
+            details=f"client signed deposit tx {tx_hash}",
+        )
+        return self.payment.confirm_deposit(
+            job, self.jobs, self.ledger, tx_hash, signer_id
+        )
 
     def accept_job(self, job_id: str, agent_id: str) -> dict:
         self.constraints.assert_live()
@@ -545,6 +571,10 @@ class NexscrowSystem:
         return {
             "constraints": self.constraints.public_view(),
             "stats": self.board()["stats"],
-            "escrow_account": self.constraints.intents.get("escrow_account"),
+            "escrow_account": (
+                self.constraints.escrow.get("account")
+                or self.constraints.intents.get("escrow_account")
+            ),
             "agent_api_configured": self.agent_api.configured,
+            "live_payouts_ready": bool(os.environ.get("ESCROW_PRIVATE_KEY")),
         }

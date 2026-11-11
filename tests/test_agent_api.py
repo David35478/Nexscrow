@@ -26,7 +26,7 @@ def test_client_configured_uses_key():
 
 def test_escrow_account_wired(make_system):
     sys_ = make_system()
-    assert sys_.constraints.intents["escrow_account"] == "yurrri.near"
+    assert sys_.constraints.escrow["account"] == "yurrri.near"
     view = sys_.public_view()
     assert view["escrow_account"] == "yurrri.near"
     # catalog policy carries its source
@@ -37,7 +37,7 @@ def test_escrow_account_wired(make_system):
 
 def test_quote_recipient_uses_escrow_account(make_system):
     sys_ = make_system()
-    assert sys_.constraints.intents["escrow_account"] == "yurrri.near"
+    assert sys_.constraints.escrow["account"] == "yurrri.near"
 
 
 def test_live_mode_refuses_release_without_real_payout(tmp_path):
@@ -56,14 +56,14 @@ def test_live_mode_refuses_release_without_real_payout(tmp_path):
     job = sys_.jobs.create(
         "Live release", "", 2.0, release_condition="auto", simulated=False
     )
-    # skip the 1Click deposit-confirmation path (needs INTENTS_API_KEY);
+    # skip the wallet-signed deposit path (needs an on-chain tx);
     # mark the deposit locked directly so we test the release guard itself
     sys_.jobs.update(job["job_id"], payment_status="locked")
     sys_.accept_job(job["job_id"], "agent-oracle-1")
     sys_.run_work(job["job_id"])
     import pytest
 
-    with pytest.raises(PaymentError, match="not enabled yet"):
+    with pytest.raises(PaymentError, match="ESCROW_PRIVATE_KEY"):
         sys_.submit_proof(job["job_id"])
     # funds stay locked; the ledger never claims a transfer
     stuck = sys_.jobs.get(job["job_id"])

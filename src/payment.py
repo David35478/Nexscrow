@@ -1,14 +1,21 @@
-"""Payment layer: NEAR Intents 1Click deposits (real) or simulated escrow (demo)."""
+"""Payment layer: real NEAR escrow transfers, or simulated escrow for demos.
+
+Live path (docs.near.org):
+- Deposit: the client signs a NEAR Transfer to the escrow account in their
+  own wallet; `confirm_deposit` verifies the transaction on-chain via RPC.
+- Release/refund: the escrow account signs a Transfer with its access key
+  (ESCROW_PRIVATE_KEY env) and broadcasts it. Without the key the platform
+  refuses rather than pretending money moved.
+"""
 
 from __future__ import annotations
 
 import os
 
-import httpx
-
 from src.constraints import Constraints
 from src.jobs import JobStore
 from src.ledger import Ledger
+from src import near_chain
 from src.storage import utcnow
 
 
@@ -28,101 +35,178 @@ class PaymentLayer:
             return bool(job["simulated"])
         return bool(job.get("demo", self.demo))
 
-    def _api_key(self) -> str | None:
-        return os.environ.get("INTENTS_API_KEY") or None
+    def escrow_account(self) -> str:
+        account = self.c.escrow.get("account") or self.c.intents.get("escrow_account")
+        if not account:
+            raise PaymentError("escrow.account is not configured")
+        return str(account)
 
-    def _base_url(self) -> str:
-        return str(self.c.intents.get("api_url", "https://1click.chaindefuser.com")).rstrip("/")
+    def _rpc_url(self) -> str:
+        return str(self.c.escrow.get("rpc_url", "https://rpc.mainnet.near.org")).rstrip("/")
+
+    def _escrow_key(self) -> str | None:
+        return os.environ.get("ESCROW_PRIVATE_KEY") or None
+
+    def _price(self) -> float:
+        return near_chain.near_usd_price(
+            str(
+                self.c.escrow.get(
+                    "price_url", "https://api.coingecko.com/api/v3/simple/price"
+                )
+            ),
+            int(self.c.escrow.get("price_ttl_seconds", 60)),
+        )
 
     def create_deposit_address(self, job: dict) -> str:
-        """Return the address the client pays to lock the reward."""
+        """Where the client pays to lock the reward.
+
+        Simulated jobs get a labeled placeholder. Live jobs pay the real
+        escrow account directly — the wallet signs the transfer itself.
+        """
         if self._simulated(job):
             return f"nexscrow.escrow.job.{job['job_id']}@intents-demo"
-        key = self._api_key()
-        if not key:
-            raise PaymentError(
-                "real payments need INTENTS_API_KEY (1Click partner key);"
-                " enable demo_mode in config.yaml for the simulated flow"
-            )
-        payload = {
-            "type": "EXACT_INPUT",
-            "swapType": "ORIGIN_CHAIN",
-            "assetIn": str(self.c.intents.get("settle_asset_id", "usdc.eth")),
-            "assetOut": str(self.c.intents.get("settle_asset_id", "nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")),
-            "amountIn": str(int(job["reward_usd"] * 10**6)),
-            "recipient": self.c.intents.get("escrow_account", "nexscrow.escrow.near"),
-            "deadline": self.c.intents.get("quote_deadline_seconds", 3600),
+        return self.escrow_account()
+
+    def prepare_deposit(self, job: dict, jobs: JobStore) -> dict:
+        """Compute the exact NEAR amount the client's wallet should sign."""
+        if self._simulated(job):
+            raise PaymentError("simulated jobs use deposit/approve, not a wallet deposit")
+        if job["payment_status"] != "pending":
+            raise PaymentError(f"job {job['job_id']} deposit is already '{job['payment_status']}'")
+        price = self._price()
+        amount_yocto = near_chain.usd_to_yocto(job["reward_usd"], price)
+        jobs.update(job["job_id"], deposit_expected_yocto=str(amount_yocto))
+        return {
+            "receiver_id": self.escrow_account(),
+            "amount_yocto": str(amount_yocto),
+            "amount_near": amount_yocto / 10**24,
+            "price_usd": price,
+            "rpc_url": self._rpc_url(),
         }
-        try:
-            resp = httpx.post(
-                self._base_url() + str(self.c.intents.get("quote_path", "/v0/quote")),
-                json=payload,
-                headers={"X-API-Key": key},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except httpx.HTTPError as exc:
-            raise PaymentError(f"1Click quote request failed: {exc}") from exc
-        address = data.get("depositAddress") or (data.get("quote") or {}).get("depositAddress")
-        if not address:
-            raise PaymentError("1Click quote returned no depositAddress")
-        return address
+
+    def confirm_deposit(
+        self,
+        job: dict,
+        jobs: JobStore,
+        ledger: Ledger,
+        tx_hash: str,
+        signer_id: str,
+    ) -> dict:
+        """Verify the wallet-signed deposit on-chain and lock the escrow."""
+        if self._simulated(job):
+            raise PaymentError("simulated jobs use deposit/approve, not a wallet deposit")
+        if job["payment_status"] != "pending":
+            raise PaymentError(f"job {job['job_id']} deposit is already '{job['payment_status']}'")
+        if not tx_hash:
+            raise PaymentError("tx_hash is required")
+        # replay protection: one deposit transaction funds exactly one job
+        for other in jobs.list():
+            if other.get("deposit_tx_hash") == tx_hash:
+                raise PaymentError("this transaction already funded another job")
+        expected = job.get("deposit_expected_yocto")
+        if expected is None:
+            prepared = self.prepare_deposit(job, jobs)
+            expected = prepared["amount_yocto"]
+        signer = signer_id or job.get("client_account") or None
+        result = near_chain.verify_deposit_tx(
+            self._rpc_url(),
+            tx_hash,
+            self.escrow_account(),
+            int(expected),
+            expected_signer=signer,
+        )
+        updated = jobs.update(
+            job["job_id"],
+            payment_status="locked",
+            deposit_tx_hash=tx_hash,
+            deposit_paid_yocto=str(result["paid_yocto"]),
+            client_account=result["signer_id"],
+        )
+        ledger.append(
+            "deposit_locked",
+            job_id=job["job_id"],
+            details=(
+                f"{result['paid_yocto'] / 10**24:.4f} NEAR locked in escrow"
+                f" (tx {tx_hash})"
+            ),
+            amount_usd=job["reward_usd"],
+        )
+        return updated
 
     def lock_deposit(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
-        """Mark the reward as locked in escrow."""
+        """Mark the reward as locked in escrow (simulated jobs only).
+
+        Live jobs must go through prepare_deposit + confirm_deposit — the
+        client signs a real NEAR transfer in their wallet.
+        """
         if self._simulated(job):
             updated = jobs.update(job["job_id"], payment_status="locked")
             ledger.append(
                 "deposit_locked",
                 job_id=job["job_id"],
-                details=f"${job['reward_usd']:.2f} locked in escrow (simulated NEAR Intents deposit)",
+                details=f"${job['reward_usd']:.2f} locked in escrow (simulated deposit)",
                 amount_usd=job["reward_usd"],
             )
             return updated
-        # Real mode: the 1Click quote is polled until the deposit lands.
-        key = self._api_key()
+        raise PaymentError(
+            "live deposits are wallet-signed NEAR transfers; call"
+            " deposit/prepare then deposit/confirm with the tx hash"
+        )
+
+    def _payout_amount_yocto(self, job: dict, share_usd: float) -> int:
+        """USD share -> yoctoNEAR, pro-rated against the actual deposit."""
+        paid = job.get("deposit_paid_yocto")
+        if paid:
+            return int(int(paid) * share_usd / job["reward_usd"])
+        return near_chain.usd_to_yocto(share_usd, self._price())
+
+    def _send(self, job: dict, receiver: str, amount_yocto: int) -> str:
+        key = self._escrow_key()
         if not key:
-            raise PaymentError("cannot confirm a real deposit without INTENTS_API_KEY")
-        try:
-            resp = httpx.get(
-                f"{self._base_url()}/v0/status",
-                params={"quoteId": job["deposit_address"]},
-                headers={"X-API-Key": key},
-                timeout=15,
+            raise PaymentError(
+                "live on-chain payouts need ESCROW_PRIVATE_KEY (an ed25519"
+                " access key for the escrow account); funds stay locked"
+                " in escrow until it is configured"
             )
-            resp.raise_for_status()
-            status = str(resp.json().get("status", "")).lower()
-        except httpx.HTTPError as exc:
-            raise PaymentError(f"1Click status check failed: {exc}") from exc
-        if status not in ("completed", "executed", "deposit_seen"):
-            raise PaymentError(f"deposit not confirmed yet (status: {status or 'unknown'})")
-        updated = jobs.update(job["job_id"], payment_status="locked")
-        ledger.append("deposit_locked", job_id=job["job_id"], amount_usd=job["reward_usd"])
-        return updated
+        result = near_chain.transfer_near(
+            self._rpc_url(),
+            self.escrow_account(),
+            key,
+            receiver,
+            amount_yocto,
+        )
+        return str(result["tx_hash"])
 
     def release(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Pay the agent and collect the protocol fee."""
-        if not self._simulated(job):
-            # Live-mode payouts require the Intents SDK transfer path, which
-            # is not wired yet. Never pretend money moved: refuse instead.
-            raise PaymentError(
-                "live on-chain payouts are not enabled yet; use demo_mode"
-                " or wire the Intents SDK payout path"
-            )
         payout, fee = self.c.payout_split(job["reward_usd"])
-        mode = "simulated"
+        payout_tx = None
+        if self._simulated(job):
+            mode = "simulated"
+        else:
+            mode = "live"
+            profile = self.c.agent_profiles.get(job["agent"] or "", {})
+            destination = profile.get("payout_account")
+            if not destination:
+                raise PaymentError(
+                    f"agent '{job['agent']}' has no payout_account configured in"
+                    " agent_profiles; funds stay locked in escrow"
+                )
+            payout_tx = self._send(job, destination, self._payout_amount_yocto(job, payout))
         ledger.append(
             "funds_released",
             job_id=job["job_id"],
-            details=f"${payout:.2f} paid to agent {job['agent']} ({mode})",
+            details=(
+                f"${payout:.2f} paid to agent {job['agent']} ({mode})"
+                + (f" tx {payout_tx}" if payout_tx else "")
+            ),
             amount_usd=job["reward_usd"],
         )
         if fee > 0:
             ledger.append(
                 "protocol_fee_collected",
                 job_id=job["job_id"],
-                details=f"protocol fee ${fee:.2f}",
+                details=f"protocol fee ${fee:.2f} (held in escrow account)",
                 amount_usd=fee,
             )
         return jobs.update(
@@ -131,22 +215,39 @@ class PaymentLayer:
             payment_status="released",
             agent_payout_usd=payout,
             fee_usd=fee,
+            payout_tx_hash=payout_tx,
             completed_at=utcnow(),
         )
 
     def refund(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Return locked funds to the client."""
-        if not self._simulated(job):
-            # Same as release: never record a transfer that did not happen.
-            raise PaymentError(
-                "live on-chain refunds are not enabled yet; use demo_mode"
-                " or wire the Intents SDK refund path"
+        refund_tx = None
+        if self._simulated(job):
+            mode = "simulated"
+        else:
+            mode = "live"
+            client_account = job.get("client_account") or (
+                (job.get("client_id") or "").removeprefix("near:") or None
             )
-        mode = "simulated"
+            if not client_account:
+                raise PaymentError(
+                    "cannot refund: the client's NEAR account is unknown;"
+                    " the client must confirm the deposit with their wallet"
+                )
+            refund_tx = self._send(
+                job, client_account, int(job.get("deposit_paid_yocto") or 0)
+                if job.get("deposit_paid_yocto")
+                else self._payout_amount_yocto(job, job["reward_usd"]),
+            )
         ledger.append(
             "funds_refunded",
             job_id=job["job_id"],
-            details=f"${job['reward_usd']:.2f} returned to client ({mode})",
+            details=(
+                f"${job['reward_usd']:.2f} returned to client ({mode})"
+                + (f" tx {refund_tx}" if refund_tx else "")
+            ),
             amount_usd=job["reward_usd"],
         )
-        return jobs.update(job["job_id"], payment_status="refunded")
+        return jobs.update(
+            job["job_id"], payment_status="refunded", refund_tx_hash=refund_tx
+        )

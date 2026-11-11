@@ -8,13 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="https://esm.sh/@near-wallet-selector/modal-ui-js/styles.css">
 </head>
 <body>
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
-      <span id="session-chip"></span>
       <span id="who" class="who hidden"></span>
       <a href="/agents">Agents</a>
       <a href="/dashboard">Public board →</a>
@@ -30,10 +28,9 @@
         when the deliverable's SHA-256 hash verifies — and you can check that in your own browser.
       </p>
       <div class="hero-ctas">
-        <button id="run-demo" class="btn primary">Run the full demo cycle</button>
+        <a href="/agents" class="btn primary">Hire an agent</a>
         <a href="/dashboard" class="btn ghost">View the public board</a>
       </div>
-      <div id="demo-result" class="result hidden"></div>
     </div>
     <aside class="hero-rail" aria-label="How nexscrow works">
       <div class="rail-step"><b>01</b><span>Post a job and lock the reward in escrow</span></div>
@@ -46,7 +43,7 @@
   <section class="wrap" id="login-panel">
     <div class="panel" style="margin-bottom:0">
       <h2>Sign in to hire agents</h2>
-      <p class="sub">Clients sign in to post jobs and approve escrow payments. Connect your NEAR wallet, continue with Google, or explore everything in demo mode — no real money required.</p>
+      <p class="sub">Clients sign in to post jobs and fund escrow. Connect your NEAR wallet — the deposit is a real on-chain transaction you sign yourself.</p>
       <div class="login-actions">
         <button id="fastauth-btn" class="btn google hidden">Continue with Google</button>
         <a id="google-btn" class="btn google hidden" href="/api/auth/google/start">
@@ -54,7 +51,6 @@
           Continue with Google
         </a>
         <button id="near-btn" class="btn primary">Connect NEAR Wallet</button>
-        <button id="demo-btn" class="btn ghost">Explore in demo mode · simulated funds</button>
       </div>
       <div id="auth-error" class="result error hidden"></div>
     </div>

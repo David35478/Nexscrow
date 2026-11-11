@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nexscrow — completing wallet sign-in…</title>
+  <title>nexscrow — completing wallet action…</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,8 +11,8 @@
 </head>
 <body>
   <div class="wrap hero">
-    <h1 style="font-size:28px; font-family:var(--font-display,serif)">Completing wallet sign-in…</h1>
-    <div id="callback-status" class="result">Verifying your wallet signature.</div>
+    <h1 style="font-size:28px; font-family:var(--font-display,serif)">Completing wallet action…</h1>
+    <div id="callback-status" class="result">Verifying your wallet.</div>
     <p><a href="/">← back to nexscrow</a></p>
   </div>
   <script type="module">
@@ -22,40 +22,69 @@
     const publicKey = params.get("publicKey");
     const signature = params.get("signature");
     const challenge = params.get("challenge");
+    const jobId = params.get("job_id");
+    const txHashes = params.get("transactionHashes");
 
-    if (!accountId || !publicKey || !signature || !challenge) {
-      status.classList.add("error");
-      status.textContent = "Missing wallet signature data. Please retry connecting your NEAR wallet.";
-    } else {
+    const fail = (msg) => { status.classList.add("error"); status.textContent = `✗ ${msg}`; };
+
+    async function post(path, body) {
+      const res = await fetch(path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
+      return data;
+    }
+
+    async function confirmDeposit() {
+      const txHash = txHashes.split(",")[0];
+      for (let i = 0; i < 6; i++) {
+        try {
+          await post(`/api/jobs/${jobId}/deposit/confirm`, { tx_hash: txHash });
+          status.textContent = "✓ Deposit locked on-chain. Opening the job…";
+          setTimeout(() => (location.href = `/job/${jobId}`), 900);
+          return;
+        } catch (err) {
+          if (i === 5) throw err;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+    }
+
+    if (jobId && txHashes) {
+      status.textContent = "Verifying your escrow deposit on-chain…";
+      try {
+        await confirmDeposit();
+      } catch (err) {
+        fail(err.message);
+      }
+    } else if (accountId && publicKey && signature && challenge) {
       const callbackUrl = `${location.origin}${location.pathname}?challenge=${challenge}`;
       try {
-        const res = await fetch("/api/auth/near/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            account_id: accountId,
-            public_key: publicKey,
-            signature: signature,
-            nonce: challenge,
-            recipient: location.hostname,
-            callback_url: callbackUrl,
-          }),
+        const data = await post("/api/auth/near/verify", {
+          account_id: accountId,
+          public_key: publicKey,
+          signature: signature,
+          nonce: challenge,
+          recipient: location.hostname,
+          callback_url: callbackUrl,
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
         status.textContent = `✓ Signed in as ${data.user.name}. Redirecting…`;
         setTimeout(() => (location.href = "/dashboard"), 1200);
       } catch (err) {
-        status.classList.add("error");
         if (/expired|challenge/i.test(err.message)) {
           // burned nonce: the home page's restore auto-completes the login
           // with a fresh challenge since the wallet is already connected
           status.textContent = "Login challenge expired — retrying…";
           setTimeout(() => (location.href = "/"), 900);
         } else {
-          status.textContent = `✗ ${err.message}`;
+          fail(err.message);
         }
       }
+    } else {
+      fail("Missing wallet data. Please retry connecting your NEAR wallet.");
     }
   </script>
 </body>

@@ -93,7 +93,8 @@ class PostgresStore:
         self._ensure_schema()
 
     def _connect(self):
-        return self._psycopg.connect(self._dsn, autocommit=False)
+        # bounded timeout so a stalled DB connection cannot hang a request
+        return self._psycopg.connect(self._dsn, autocommit=False, connect_timeout=10)
 
     def _ensure_schema(self) -> None:
         with self._connect() as conn:

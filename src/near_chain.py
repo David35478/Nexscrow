@@ -28,6 +28,11 @@ class NearChainError(Exception):
     pass
 
 
+class NearChainTransportError(NearChainError):
+    """Upstream NEAR RPC / price-service failure — retryable, not the
+    client's fault (maps to 502 rather than 400)."""
+
+
 _B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
@@ -66,7 +71,7 @@ def rpc(method: str, params: Any, rpc_url: str) -> Any:
         resp.raise_for_status()
         data = resp.json()
     except httpx.HTTPError as exc:
-        raise NearChainError(f"NEAR RPC {method} failed: {exc}") from exc
+        raise NearChainTransportError(f"NEAR RPC {method} failed: {exc}") from exc
     if "error" in data:
         err = data["error"]
         raise NearChainError(
@@ -96,7 +101,7 @@ def near_usd_price(price_url: str, ttl_seconds: int = 60) -> float:
         resp.raise_for_status()
         price = float(resp.json()["near"]["usd"])
     except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
-        raise NearChainError(f"NEAR/USD price unavailable: {exc}") from exc
+        raise NearChainTransportError(f"NEAR/USD price unavailable: {exc}") from exc
     _price_cache.update(usd=price, fetched_at=now)
     return price
 

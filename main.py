@@ -19,7 +19,7 @@ from src.constraints import ConstraintError
 from src.env import load_env
 from src.escrow import ReleaseBlocked
 from src.jobs import JobNotFound
-from src.near_chain import NearChainError
+from src.near_chain import NearChainError, NearChainTransportError
 from src.payment import PaymentError
 from src.system import NexscrowSystem
 
@@ -116,6 +116,7 @@ def create_app(
     for exc, code in (
         (ConstraintError, 400),
         (PaymentError, 400),
+        (NearChainTransportError, 502),
         (NearChainError, 400),
         (AuthError, 400),
         (JobNotFound, 404),

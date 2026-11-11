@@ -119,17 +119,9 @@ class NexscrowSystem:
         # never let the request bind someone else's transfer to this job.
         if client_id and client_id.startswith("near:"):
             signer_id = client_id.removeprefix("near:")
-        updated = self.payment.confirm_deposit(
+        return self.payment.confirm_deposit(
             job, self.jobs, self.ledger, tx_hash, signer_id
         )
-        # Only record a signed deposit after on-chain verification passes —
-        # the ledger is append-only, so a fake tx must not leave an entry.
-        self.ledger.append(
-            "deposit_approved",
-            job_id=job_id,
-            details=f"client signed deposit tx {tx_hash}",
-        )
-        return updated
 
     def accept_job(self, job_id: str, agent_id: str) -> dict:
         self.constraints.assert_live()

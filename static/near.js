@@ -277,6 +277,26 @@ async function payEscrow(jobId, retried) {
       return d;
     });
   const wallet = await walletOrConnect();
+  // If the session is NEAR-authed, the wallet must hold that account —
+  // signing from a different account would move NEAR the job can't claim.
+  try {
+    const session = await fetch("/api/auth/session").then((r) => r.json());
+    const uid = session && session.user && session.user.user_id;
+    if (uid && uid.startsWith("near:") && wallet.getAccounts) {
+      const accounts = await wallet.getAccounts();
+      const acct = accounts && accounts[0] && accounts[0].accountId;
+      const expected = uid.slice(5);
+      if (acct && acct !== expected) {
+        throw new Error(
+          `Connected wallet is ${acct} but you're signed in as ${expected} —` +
+            " switch wallets or sign in again."
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Connected wallet")) throw err;
+    // session lookup failing shouldn't block a signature
+  }
   const tx = {
     receiverId: prep.receiver_id,
     actions: [

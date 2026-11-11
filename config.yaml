@@ -1,8 +1,10 @@
 # nexscrow - Agent Escrow configuration.
 # All safety rules and integration settings live here.
 
-# Demo mode: fully simulated payments, no real money moves.
-demo_mode: true
+# Simulation is per-session: only users who click "demo mode" get simulated
+# funds; everyone else runs the live escrow flow. (Global killswitch for
+# local development; the product default is live.)
+demo_mode: false
 
 # NEAR Intents 1Click payment layer (used when demo_mode is false)
 intents:

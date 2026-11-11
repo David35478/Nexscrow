@@ -53,7 +53,9 @@ def test_live_mode_refuses_release_without_real_payout(tmp_path):
     from src.system import NexscrowSystem
 
     sys_ = NexscrowSystem(str(path), str(tmp_path / "data"))
-    job = sys_.jobs.create("Live release", "", 2.0, release_condition="auto")
+    job = sys_.jobs.create(
+        "Live release", "", 2.0, release_condition="auto", simulated=False
+    )
     # skip the 1Click deposit-confirmation path (needs INTENTS_API_KEY);
     # mark the deposit locked directly so we test the release guard itself
     sys_.jobs.update(job["job_id"], payment_status="locked")

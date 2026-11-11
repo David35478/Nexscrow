@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from datetime import datetime, timedelta, timezone
 
 from src.agent import WorkEngine
@@ -47,10 +49,13 @@ class NexscrowSystem:
         deliverables: str = "",
         deadline_hours: int | None = None,
         release_condition: str = "manual",
+        simulated: bool | None = None,
     ) -> dict:
         if not title or not title.strip():
             raise ConstraintError("title is required")
         self.constraints.check_reward(reward_usd)
+        if simulated is None:
+            simulated = self.constraints.demo_mode
         window = (
             self.constraints.default_dispute_window_minutes
             if dispute_window_minutes is None
@@ -68,6 +73,7 @@ class NexscrowSystem:
             deliverables=deliverables,
             deadline_hours=deadline_hours,
             release_condition=release_condition,
+            simulated=simulated,
         )
         job["deposit_address"] = self.payment.create_deposit_address(job)
         self.jobs.update(job["job_id"], deposit_address=job["deposit_address"])
@@ -274,6 +280,13 @@ class NexscrowSystem:
         job = self.jobs.get(job_id)
         if job["status"] != "accepted" or not job["agent"]:
             raise ConstraintError(f"job {job_id} must be accepted by an agent first")
+        payment_sim = self.payment._simulated(job)
+        if not payment_sim and not os.environ.get("NEAR_AI_API_KEY"):
+            # No fake deliverables in live mode: refuse rather than template.
+            raise ConstraintError(
+                "live agents are not deployed yet — coming soon;"
+                " use demo mode to explore the flow"
+            )
         self.ledger.append(
             "agent_working",
             job_id=job_id,
@@ -391,14 +404,13 @@ class NexscrowSystem:
         reward_usd: float = 5.0,
         client: str = "demo-client",
     ) -> dict:
-        """Full simulated cycle: post -> lock -> accept -> work -> proof ->
-        (buyer approval) -> release."""
-        if not self.constraints.demo_mode:
-            raise ConstraintError("run_demo_cycle only works in demo_mode")
+        """Fully simulated showcase cycle: post -> lock -> accept -> work ->
+        proof -> (buyer approval) -> release. Always clearly marked simulated,
+        even when the platform is in live mode."""
         if not self.constraints.allowed_agents:
             raise ConstraintError("no allowed agents configured")
         trace: list[dict] = []
-        job = self.post_job(title, description, reward_usd, client)
+        job = self.post_job(title, description, reward_usd, client, simulated=True)
         self.approve_deposit(job["job_id"], client_id="demo-client")
         job = self.jobs.get(job["job_id"])
         trace.append(

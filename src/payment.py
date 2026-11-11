@@ -21,6 +21,13 @@ class PaymentLayer:
         self.c = constraints
         self.demo = constraints.demo_mode
 
+    def _simulated(self, job: dict) -> bool:
+        """Per-job simulation: demo-session jobs are simulated; real jobs use
+        live escrow. Falls back to the global flag for legacy jobs."""
+        if "simulated" in job:
+            return bool(job["simulated"])
+        return bool(job.get("demo", self.demo))
+
     def _api_key(self) -> str | None:
         return os.environ.get("INTENTS_API_KEY") or None
 
@@ -29,7 +36,7 @@ class PaymentLayer:
 
     def create_deposit_address(self, job: dict) -> str:
         """Return the address the client pays to lock the reward."""
-        if self.demo:
+        if self._simulated(job):
             return f"nexscrow.escrow.job.{job['job_id']}@intents-demo"
         key = self._api_key()
         if not key:
@@ -64,7 +71,7 @@ class PaymentLayer:
 
     def lock_deposit(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Mark the reward as locked in escrow."""
-        if self.demo:
+        if self._simulated(job):
             updated = jobs.update(job["job_id"], payment_status="locked")
             ledger.append(
                 "deposit_locked",
@@ -96,7 +103,7 @@ class PaymentLayer:
 
     def release(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Pay the agent and collect the protocol fee."""
-        if not self.demo:
+        if not self._simulated(job):
             # Live-mode payouts require the Intents SDK transfer path, which
             # is not wired yet. Never pretend money moved: refuse instead.
             raise PaymentError(
@@ -129,7 +136,7 @@ class PaymentLayer:
 
     def refund(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Return locked funds to the client."""
-        if not self.demo:
+        if not self._simulated(job):
             # Same as release: never record a transfer that did not happen.
             raise PaymentError(
                 "live on-chain refunds are not enabled yet; use demo_mode"

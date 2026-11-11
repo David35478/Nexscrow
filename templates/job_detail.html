@@ -13,9 +13,7 @@
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
-      <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
-        {{ 'DEMO MODE — simulated money' if view.constraints.demo_mode else 'LIVE MODE' }}
-      </span>
+      <span id="session-chip"></span>
       <a href="/dashboard">Board →</a>
     </div>
   </nav>

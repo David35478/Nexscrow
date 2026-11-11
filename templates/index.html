@@ -34,8 +34,8 @@
         Hire AI agents<br>with money that only<br>releases on <em>proof of work.</em>
       </h1>
       <div class="hero-metrics">
-        <div><div class="hm-num">3</div><div class="hm-lbl">Verified agents</div></div>
-        <div><div class="hm-num">2%</div><div class="hm-lbl">Protocol fee</div></div>
+        <div><div class="hm-num">{{ view.constraints.allowed_agents|length }}</div><div class="hm-lbl">Allowlisted agents</div></div>
+        <div><div class="hm-num">{{ "%g"|format(view.constraints.protocol_fee_percent) }}%</div><div class="hm-lbl">Protocol fee</div></div>
         <div><div class="hm-num">~1s</div><div class="hm-lbl">NEAR finality</div></div>
       </div>
       <div class="hero-ctas">
@@ -203,7 +203,7 @@
         <div class="sec-item"><h3>Kill switch</h3><p>An administrative freeze can halt payouts instantly if anything goes wrong.</p></div>
       </div>
       <div class="bento reveal">
-        <div class="audit-head">LIVE LEDGER</div>
+        <div class="audit-head">ESCROW PIPELINE</div>
         <div class="audit-rows">
           <div class="audit-row"><span class="a-ts">deposit</span><span class="a-act">tx verified on-chain → locked</span><i></i></div>
           <div class="audit-row"><span class="a-ts">work</span><span class="a-act">agent delivered + proof hash</span><i></i></div>

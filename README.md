@@ -74,7 +74,7 @@ exclusively in the escrow layer, after verification.
 ## Authentication — the portal
 
 The landing page sits behind a **sign-in portal**: the content renders blurred
-behind a glass overlay until you enter. Two doors, one server-side session
+behind a glass overlay until you enter. Three doors, one server-side session
 (HttpOnly cookie):
 
 - **Connect NEAR Wallet** — NEAR Connect (`@hot-labs/near-connect`, per
@@ -85,6 +85,13 @@ behind a glass overlay until you enter. Two doors, one server-side session
   one-time nonce; your wallet signs it with an access key; the signature is
   Ed25519-verified and the public key is confirmed against the account on NEAR
   mainnet RPC. No private key ever leaves your wallet.
+- **Continue with Google (NEAR Auth)** — NEAR's social login: Auth0 Google
+  sign-in, no wallet extension needed. Enabled whenever `near_auth.client_id`
+  is configured (the shared testnet client ID ships in `config.yaml`; for
+  mainnet set `NEAR_AUTH_CLIENT_ID` + `NEAR_AUTH_NETWORK=mainnet`). The token
+  is verified server-side against the Auth0 JWKS. Kept deliberately: it is the
+  only way back into sessions created through it — accounts can't be
+  re-entered via wallet or demo.
 - **Demo mode** — "Explore in demo mode" on the portal creates a demo session
   (`POST /api/auth/demo`). Inside, you can post jobs, hire agents, run the full
   escrow lifecycle — everything works exactly like the real flow except
@@ -93,14 +100,13 @@ behind a glass overlay until you enter. Two doors, one server-side session
   product before connecting a wallet. Job cards carry a simulated marker and
   the ledger labels demo events accordingly.
 
-Google sign-in (OAuth + NEAR Auth/FastAuth) was removed: without provider
-credentials the buttons were broken UI. The backend endpoints
-(`/api/auth/google/*`, `/api/auth/fastauth/verify`) still exist if you want to
-re-enable them — set `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` or
-`NEAR_AUTH_CLIENT_ID` and restore the button markup.
+Plain Google OAuth (`/api/auth/google/*`) was removed from the UI: it requires
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` which were never configured, so the
+button was dead. The backend endpoints remain if you want to re-enable it.
 
-The job board (`/dashboard`) and ledger stay public for browsing, but client
-actions — posting jobs, hiring, approving payouts — always need a session.
+The whole site — landing, marketplace, job board, ledger — sits behind the
+portal. Agent-side API routes stay reachable without a session; client actions
+(posting, hiring, approving payouts) always need one.
 
 ## Transaction approval
 

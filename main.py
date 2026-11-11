@@ -194,6 +194,18 @@ def create_app(
         )
         return response
 
+    @app.post("/api/auth/signup")
+    async def auth_signup(request: Request) -> dict:
+        """Login and signup are one action: a wallet or Google identity
+        creates the account on first sign-in."""
+        user = current_user(request)
+        if not user:
+            raise HTTPException(
+                status_code=401,
+                detail="sign in with your wallet or Google to create an account",
+            )
+        return {"user": user}
+
     @app.post("/api/auth/logout")
     async def auth_logout(request: Request) -> dict:
         auth.logout(request.cookies.get(SESSION_COOKIE))
@@ -284,6 +296,8 @@ def create_app(
             if near_auth_cfg.get("client_id")
             else None
         )
+        view["live_agents_ready"] = bool(os.environ.get("NEAR_AI_API_KEY"))
+        view["real_escrow_ready"] = bool(os.environ.get("INTENTS_API_KEY"))
         return view
 
     @app.get("/api/jobs")
@@ -304,6 +318,8 @@ def create_app(
             deliverables=body.deliverables,
             deadline_hours=body.deadline_hours,
             release_condition=body.release_condition,
+            # demo-session users create simulated jobs; everyone else is live
+            simulated=(user.get("provider") == "demo"),
         )
         return {"job": job}
 

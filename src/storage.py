@@ -75,3 +75,76 @@ class JsonStore:
             result = mutate(data)
             self._write(name, data)
             return result
+
+
+class PostgresStore:
+    """Durable store for serverless (Vercel): one JSONB row per collection.
+
+    The JSON file store lives in /tmp on serverless and is wiped on every
+    cold start, which silently logged users out. Postgres keeps sessions,
+    jobs and the ledger durable across deployments.
+    """
+
+    def __init__(self, dsn: str):
+        import psycopg
+
+        self._dsn = dsn
+        self._psycopg = psycopg
+        self._ensure_schema()
+
+    def _connect(self):
+        return self._psycopg.connect(self._dsn, autocommit=False)
+
+    def _ensure_schema(self) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "CREATE TABLE IF NOT EXISTS nexscrow_kv"
+                    " (name TEXT PRIMARY KEY, data JSONB NOT NULL)"
+                )
+            conn.commit()
+
+    def read(self, name: str, default: Any) -> Any:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT data FROM nexscrow_kv WHERE name = %s", (name,))
+                row = cur.fetchone()
+                return row[0] if row else default
+
+    def write(self, name: str, data: Any) -> None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO nexscrow_kv (name, data) VALUES (%s, %s)"
+                    " ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data",
+                    (name, self._psycopg.types.json.Json(data)),
+                )
+            conn.commit()
+
+    def update(self, name: str, default: Any, mutate: Callable[[Any], Any]) -> Any:
+        """Read-mutate-write under a row lock; returns mutate's result."""
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT data FROM nexscrow_kv WHERE name = %s FOR UPDATE",
+                    (name,),
+                )
+                row = cur.fetchone()
+                data = row[0] if row else default
+                result = mutate(data)
+                cur.execute(
+                    "INSERT INTO nexscrow_kv (name, data) VALUES (%s, %s)"
+                    " ON CONFLICT (name) DO UPDATE SET data = EXCLUDED.data",
+                    (name, self._psycopg.types.json.Json(data)),
+                )
+            conn.commit()
+            return result
+
+
+def create_store(data_dir: str | Path | None = None) -> Any:
+    """JSON store locally; Postgres when DATABASE_URL/POSTGRES_URL is set
+    (serverless). An explicit data_dir (tests) always forces the JSON store."""
+    dsn = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL")
+    if dsn and not data_dir:
+        return PostgresStore(dsn)
+    return JsonStore(data_dir)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from main import create_app
@@ -48,6 +49,30 @@ def test_login_required_for_client_actions(tmp_path):
     c.post("/api/auth/logout")
     assert c.get("/api/auth/session").json()["user"] is None
     assert c.post("/api/jobs", json={"title": "Again", "reward_usd": 1.0}).status_code == 401
+
+
+def test_demo_session_creates_simulated_jobs(tmp_path):
+    """Demo sessions get simulated funds; live (non-demo) jobs use the real
+    deposit flow and refuse fake payouts."""
+    c = client(tmp_path)
+    login_demo(c)  # provider == "demo"
+    demo_job = post_job(c, "Demo job", 2.0)
+    job = c.get(f"/api/jobs/{demo_job}").json()
+    assert job["simulated"] is True
+    assert "@intents-demo" in job["deposit_address"]
+
+    # a live (non-demo) job via the system layer: without a 1Click key the
+    # platform refuses rather than faking a deposit address (covered by
+    # test_live_job_needs_real_deposit_address below)
+
+
+def test_live_job_needs_real_deposit_address(tmp_path):
+    from src.payment import PaymentError
+
+    c = client(tmp_path)
+    sys_ = c.app.state.system
+    with pytest.raises(PaymentError, match="INTENTS_API_KEY"):
+        sys_.post_job("Live job", "", 3.0, simulated=False)
 
 
 def test_api_full_lifecycle_with_approval(tmp_path):

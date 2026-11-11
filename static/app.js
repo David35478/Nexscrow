@@ -10,7 +10,12 @@ async function api(path, opts = {}) {
     ...opts,
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || res.statusText);
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("Sign in required — connect your wallet or continue with Google on the home page.");
+    }
+    throw new Error(data.error || data.detail || res.statusText);
+  }
   return data;
 }
 
@@ -29,6 +34,12 @@ async function loadSession() {
 function renderWho() {
   const who = $("#who");
   if (!who) return;
+  const chip = $("#session-chip");
+  if (chip) {
+    chip.innerHTML = authUser && authUser.provider === "demo"
+      ? '<span class="badge badge-demo">Demo session · simulated funds</span>'
+      : "";
+  }
   if (authUser) {
     who.classList.remove("hidden");
     who.innerHTML = `${escapeHtml(authUser.name)} · <a href="#" id="logout-link" style="color:var(--accent)">logout</a>`;

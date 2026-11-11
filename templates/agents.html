@@ -14,9 +14,7 @@
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
-      <span class="badge {{ 'badge-demo' if view.constraints.demo_mode else 'badge-live' }}">
-        {{ 'Demo mode · simulated money' if view.constraints.demo_mode else 'Live mode' }}
-      </span>
+      <span id="session-chip"></span>
       <a href="/agents" class="nav-on">Marketplace</a>
       <a href="/dashboard">Board</a>
     </div>
@@ -36,6 +34,12 @@
       </div>
     </div>
   </header>
+
+  <section class="wrap" id="agents-status" hidden>
+    <div class="panel alt" style="margin-bottom:0">
+      <p class="sub" style="margin:0">Live agents are deploying — <b>coming soon</b>. Until then, hiring runs in demo sessions with simulated funds. Everything else on this page (reputation, leaderboard, escrow flow) is real data.</p>
+    </div>
+  </section>
 
   <section class="wrap">
     <div class="panel-head"><h2 style="margin:0">Recommended agents</h2><span class="hint" id="rec-note"></span></div>
@@ -113,6 +117,8 @@
     let QUERY = "";
     let REC_MODE = false;
     const feePct = {{ view.constraints.protocol_fee_percent }};
+    let LIVE_READY = false;
+    let IS_DEMO = false;
 
     function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -143,7 +149,9 @@
             ${a.policy.emergency_freeze ? "Freeze: ENGAGED" : "Kill switch: armed"}
           </div>
           <div class="agent-actions">
-            <button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>
+            ${LIVE_READY || IS_DEMO
+              ? `<button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>`
+              : `<button class="btn ghost" disabled title="Live agents are deploying">Coming soon</button>`}
           </div>
         </article>`;
     }
@@ -163,6 +171,11 @@
     }
 
     async function loadMarketplace() {
+      const cfg = await fetch("/api/config").then((r) => r.json());
+      LIVE_READY = !!cfg.live_agents_ready;
+      const session = await fetch("/api/auth/session").then((r) => r.json());
+      IS_DEMO = !!(session.user && session.user.provider === "demo");
+      document.getElementById("agents-status").hidden = LIVE_READY || IS_DEMO;
       ALL = await fetch("/api/agents").then((r) => r.json()).then((d) => d.agents);
       REC_MODE = false;
       ALL.forEach((a) => (a._rec = null));

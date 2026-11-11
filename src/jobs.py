@@ -34,6 +34,7 @@ class JobStore:
         deliverables: str = "",
         deadline_hours: int | None = None,
         release_condition: str = "manual",
+        simulated: bool = True,
     ) -> dict:
         job = {
             "job_id": uuid.uuid4().hex[:10],
@@ -53,6 +54,7 @@ class JobStore:
             "agent_payout_usd": None,
             "timeout_at": None,
             "demo": bool(demo),
+            "simulated": bool(simulated),
             "min_rank": float(min_rank),
             "dispute_window_minutes": int(dispute_window_minutes),
             "disputed": False,

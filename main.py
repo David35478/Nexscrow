@@ -19,6 +19,7 @@ from src.constraints import ConstraintError
 from src.env import load_env
 from src.escrow import ReleaseBlocked
 from src.jobs import JobNotFound
+from src.near_chain import NearChainError
 from src.payment import PaymentError
 from src.system import NexscrowSystem
 
@@ -115,6 +116,7 @@ def create_app(
     for exc, code in (
         (ConstraintError, 400),
         (PaymentError, 400),
+        (NearChainError, 400),
         (AuthError, 400),
         (JobNotFound, 404),
         (ReleaseBlocked, 409),
@@ -415,7 +417,8 @@ def create_app(
         return system.cancel_job_as(job_id, client_id=user["user_id"])
 
     @app.post("/api/demo/cycle")
-    async def demo_cycle(body: DemoCycle) -> dict:
+    async def demo_cycle(body: DemoCycle, request: Request) -> dict:
+        require_user(request)
         return system.run_demo_cycle(body.title, body.description, body.reward_usd)
 
     @app.get("/api/ledger")

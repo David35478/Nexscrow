@@ -269,7 +269,7 @@ async function confirmDeposit(jobId, txHash, signerId) {
 // Prepare the deposit, open the wallet for signing, verify on-chain.
 // Returns the locked job. Throws on any failure (nothing is recorded unless
 // the on-chain deposit actually verifies).
-async function payEscrow(jobId) {
+async function payEscrow(jobId, retried) {
   const prep = await fetch(`/api/jobs/${jobId}/deposit/prepare`, { method: "POST" })
     .then(async (r) => {
       const d = await r.json().catch(() => ({}));
@@ -295,7 +295,19 @@ async function payEscrow(jobId) {
     });
     return { redirected: true };
   }
-  const outcomes = await wallet.signAndSendTransactions({ transactions: [tx] });
+  let outcomes;
+  try {
+    outcomes = await wallet.signAndSendTransactions({ transactions: [tx] });
+  } catch (err) {
+    // A restored-but-expired wallet session leaves a stale selection;
+    // clear it once and fall back to the picker.
+    if (!retried && /sign(ed)?[ -]?in|not connected|not authorized/i.test(String(err && err.message))) {
+      try { localStorage.removeItem("selected-wallet"); } catch (_) {}
+      try { await connector.disconnect(); } catch (_) {}
+      return payEscrow(jobId, true);
+    }
+    throw err;
+  }
   const first = Array.isArray(outcomes) ? outcomes[0] : outcomes;
   const txHash = txHashOf(first);
   if (!txHash) throw new Error("wallet returned no transaction hash");

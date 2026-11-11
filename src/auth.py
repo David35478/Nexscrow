@@ -295,10 +295,13 @@ class AuthService:
             message, raw_nonce, recipient, callback_url, public_key, signature
         ):
             raise AuthError("wallet signature failed verification")
+        # A valid signature consumes the challenge: a captured signature
+        # (e.g. from a browser wallet's callback URL) can never verify twice.
+        # Bad-signature attempts stay retryable; a valid-signature attempt
+        # that fails the RPC check forces one fresh signMessage on retry.
+        self.delete_challenge(nonce)
         if not near_access_key_exists(account_id, public_key):
             raise AuthError(f"public key is not an access key of account '{account_id}'")
-        # consumed only on success: a failed attempt stays retryable
-        self.delete_challenge(nonce)
         return {
             "provider": "near",
             "user_id": f"near:{account_id}",

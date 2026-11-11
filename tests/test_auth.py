@@ -243,6 +243,53 @@ def test_failed_attempt_keeps_challenge_retryable(tmp_path):
         auth_mod.near_access_key_exists = orig
 
 
+def test_valid_signature_burns_challenge_even_on_rpc_failure(tmp_path):
+    """Replay window guard: once a VALID signature is presented, the nonce
+    is consumed even if the access-key RPC check fails - a captured
+    callback-URL signature can never be replayed for a second login."""
+    auth = make_auth(tmp_path)
+    account = "alice.near"
+    signing_key = SigningKey.generate()
+    pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
+
+    challenge = auth.issue_challenge()
+    nonce_b64 = challenge["nonce"]
+    raw_nonce = base64.urlsafe_b64decode(nonce_b64 + "=" * (-len(nonce_b64) % 4))
+    message = f"Sign in to nexscrow.\nOne-time nonce: {nonce_b64}"
+    payload = (
+        struct.pack("<I", auth_mod.NEP413_TAG)
+        + _borsh_str(message.encode())
+        + raw_nonce
+        + _borsh_str(b"app.example")
+        + b"\x00"
+    )
+    good_sig = b58(signing_key.sign(hashlib.sha256(payload).digest()).signature)
+
+    orig = auth_mod.near_access_key_exists
+    # first attempt: valid signature, but the RPC ownership check fails
+    auth_mod.near_access_key_exists = lambda a, k, rpc_url=None: False
+    try:
+        with pytest.raises(AuthError, match="not an access key"):
+            auth.verify_near_login(
+                account_id=account,
+                public_key=pubkey_b58,
+                signature=good_sig,
+                nonce=nonce_b64,
+                recipient="app.example",
+            )
+        # the nonce is burned: replaying the same valid signature fails
+        with pytest.raises(AuthError, match="challenge"):
+            auth.verify_near_login(
+                account_id=account,
+                public_key=pubkey_b58,
+                signature=good_sig,
+                nonce=nonce_b64,
+                recipient="app.example",
+            )
+    finally:
+        auth_mod.near_access_key_exists = orig
+
+
 def test_near_login_rejects_replayed_nonce(tmp_path):
     auth = make_auth(tmp_path)
     challenge = auth.issue_challenge()

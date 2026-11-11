@@ -223,7 +223,7 @@ def test_transfer_near_broadcasts_signed_tx(make_system, monkeypatch):
         "https://rpc", "yurrri.near", private_key, "agent-op.near", 10**24
     )
     assert result["tx_hash"] == "payout-tx"
-    assert seen["send_tx"]["wait_until"] == "EXECUTED_OPTIMISTIC"
+    assert seen["send_tx"]["wait_until"] == "FINAL"
 
 
 def test_release_without_escrow_key_refuses(make_system, monkeypatch):
@@ -259,3 +259,103 @@ def test_release_with_key_sends_to_payout_account(make_system, monkeypatch):
     assert sent["amount"] == int(int(0.6 * 10**24) * 2.94 / 3.0)
     assert updated["payout_tx_hash"] == "payout-tx"
     assert updated["payment_status"] == "released"
+
+
+# ------------------------------------------------------- review-fix coverage
+
+def test_prepare_deposit_reuses_stored_quote(make_system, monkeypatch):
+    """Re-preparing after a price move must not strand an already-paid tx."""
+    sys_ = make_system()
+    job = sys_.post_job("Live job", "", 3.0, simulated=False)
+    monkeypatch.setattr(near_chain, "near_usd_price", lambda *a, **k: 5.0)
+    first = sys_.prepare_deposit(job["job_id"])
+    monkeypatch.setattr(near_chain, "near_usd_price", lambda *a, **k: 2.5)
+    second = sys_.prepare_deposit(job["job_id"])
+    assert second["amount_yocto"] == first["amount_yocto"]
+
+
+def test_confirm_deposit_binds_signer_to_authed_client(make_system, monkeypatch):
+    """A near:-authed client cannot claim a stranger's transfer (SEC fix)."""
+    sys_ = make_system()
+    job = sys_.post_job("Live job", "", 3.0, client_id="near:alice.near", simulated=False)
+    monkeypatch.setattr(near_chain, "near_usd_price", lambda *a, **k: 5.0)
+    sys_.prepare_deposit(job["job_id"])
+    monkeypatch.setattr(
+        near_chain, "rpc",
+        lambda m, p, u: fake_tx_result(signer="mallory.near", deposit="600000000000000000000000"),
+    )
+    # body's signer_id claims mallory, but the session is alice -> rejected
+    with pytest.raises(NearChainError, match="does not match"):
+        sys_.confirm_deposit(job["job_id"], "txhash1", "mallory.near", client_id="near:alice.near")
+
+
+def test_refund_released_live_job_refuses(make_system, monkeypatch):
+    """Refunding a released live job would double-spend pooled escrow."""
+    sys_ = make_system()
+    job = sys_.post_job("Live", "", 3.0, release_condition="auto", simulated=False)
+    sys_.jobs.update(
+        job["job_id"],
+        payment_status="released",
+        client_account="alice.near",
+        deposit_paid_yocto=str(int(0.6 * 10**24)),
+    )
+    with pytest.raises(PaymentError, match="not locked in escrow"):
+        sys_.payment.refund(sys_.jobs.get(job["job_id"]), sys_.jobs, sys_.ledger)
+
+
+def test_release_released_job_refuses_retry(make_system, monkeypatch):
+    sys_ = make_system()
+    job = sys_.post_job("Live", "", 3.0, release_condition="auto", simulated=False)
+    sys_.jobs.update(
+        job["job_id"], payment_status="released", agent="agent-oracle-1",
+        payout_tx_hash="already-sent",
+    )
+    with pytest.raises(PaymentError, match="already released"):
+        sys_.payment.release(sys_.jobs.get(job["job_id"]), sys_.jobs, sys_.ledger)
+
+
+def test_parse_private_key_accepts_64_byte_keys():
+    from nacl.signing import SigningKey
+
+    seed = bytes(range(1, 33))
+    pubkey = bytes(SigningKey(seed).verify_key)
+    key = f"ed25519:{b58encode(seed + pubkey)}"
+    parsed_seed, parsed_pub = near_chain.parse_private_key(key)
+    assert parsed_seed == seed
+    assert parsed_pub == pubkey
+    # mismatched halves rejected
+    other = bytes(SigningKey(bytes(range(33, 65))).verify_key)
+    bad = f"ed25519:{b58encode(seed + other)}"
+    with pytest.raises(NearChainError, match="does not match"):
+        near_chain.parse_private_key(bad)
+
+
+def test_transfer_near_recovers_lost_response(make_system, monkeypatch):
+    """send_tx transport failure + tx landed -> return outcome, no double-send."""
+    from nacl.signing import SigningKey
+
+    seed = bytes(range(1, 33))
+    private_key = f"ed25519:{b58encode(seed)}"
+    calls = []
+
+    def fake_rpc(method, params, rpc_url):
+        calls.append(method)
+        if method == "query":
+            return {"nonce": 41}
+        if method == "block":
+            return {"header": {"hash": b58encode(bytes(range(64, 96)))}}
+        if method == "send_tx":
+            raise NearChainError("connection reset")
+        if method == "EXPERIMENTAL_tx_status":
+            return {
+                "status": {"SuccessValue": ""},
+                "transaction_outcome": {"id": "landed-tx"},
+            }
+        raise AssertionError(method)
+
+    monkeypatch.setattr(near_chain, "rpc", fake_rpc)
+    result = near_chain.transfer_near(
+        "https://rpc", "yurrri.near", private_key, "agent-op.near", 10**24
+    )
+    assert result["tx_hash"] == "landed-tx"
+    assert calls.count("send_tx") == 1  # never retried

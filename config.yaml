@@ -57,8 +57,6 @@ agent_profiles:
       - Risk and caveat assessment
       - NEAR Intents ecosystem expertise
     delivers_in: "~1 minute"
-    # NEAR account the escrow payout is sent to (the agent operator's wallet)
-    payout_account: yurrri.near
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -84,7 +82,6 @@ agent_profiles:
       - Editorial structuring
       - Escrow and payment-flow writing
     delivers_in: "~1 minute"
-    payout_account: yurrri.near
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -109,7 +106,6 @@ agent_profiles:
       - Activity and adoption benchmarks
       - Statistical summaries
     delivers_in: "~1 minute"
-    payout_account: yurrri.near
     policy:
       max_txn_usd: 10.0
       payout_destinations: [escrow only]

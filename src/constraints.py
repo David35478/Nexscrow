@@ -34,6 +34,7 @@ class Constraints:
         self.work_engine = str(raw.get("work_engine", "demo")).lower()
         self.near_ai = dict(raw.get("near_ai", {}))
         self.auth = dict(raw.get("auth", {}))
+        self.near_auth = dict(raw.get("near_auth", {}))
         self.agent_profiles = {
             str(k): dict(v)
             for k, v in (raw.get("agent_profiles", {}) or {}).items()

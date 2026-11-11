@@ -127,6 +127,37 @@ def test_config_reports_auth_capabilities(tmp_path):
     assert auth["near_network"] == "mainnet"
 
 
+def test_config_reports_near_auth(tmp_path):
+    c = client(tmp_path)
+    na = c.get("/api/config").json()["near_auth"]
+    # testnet shared client id ships by default
+    assert na["network"] == "testnet"
+    assert na["client_id"]
+
+
+def test_fastauth_verify_endpoint(tmp_path, monkeypatch):
+    from src import auth as auth_mod
+
+    # stub the token verification: endpoint plumbing is the target here
+    monkeypatch.setattr(
+        auth_mod.AuthService,
+        "verify_fastauth_token",
+        lambda self, token, network="testnet": {
+            "provider": "near-auth",
+            "user_id": "near-auth:google-oauth2|abc",
+            "name": "user@gmail.com",
+        },
+    )
+    c = client(tmp_path)
+    r = c.post(
+        "/api/auth/fastauth/verify",
+        json={"token": "x" * 32, "network": "testnet"},
+    )
+    assert r.status_code == 200
+    assert r.json()["user"]["provider"] == "near-auth"
+    assert c.get("/api/auth/session").json()["user"]["name"] == "user@gmail.com"
+
+
 def test_job_detail_page(tmp_path):
     c = client(tmp_path)
     login_demo(c)

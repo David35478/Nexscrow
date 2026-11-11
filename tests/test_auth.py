@@ -206,3 +206,92 @@ def test_google_config_flag(tmp_path, monkeypatch):
     assert auth.google_configured() is False
     with pytest.raises(AuthError, match="not configured"):
         auth.google_auth_url("https://x/cb", "state")
+
+
+def test_fastauth_token_verification(tmp_path, monkeypatch):
+    """NEAR Auth: a correctly signed Auth0 token verifies; a tampered or
+    wrong-audience token is rejected."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    import time as _time
+
+    import jwt as pyjwt
+    from src import auth as auth_mod
+    from src.auth import AuthError, AuthService
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    kid = "test-key-1"
+    pub_jwk = {
+        "keys": [
+            {
+                "kty": "RSA",
+                "kid": kid,
+                "alg": "RS256",
+                "use": "sig",
+                **{
+                    k: v
+                    for k, v in pyjwt.algorithms.RSAAlgorithm.to_jwk(
+                        key.public_key(), as_dict=True
+                    ).items()
+                },
+            }
+        ]
+    }
+
+    class FakeJWKClient:
+        def __init__(self, url):
+            self.url = url
+
+        def get_signing_key_from_jwt(self, token):
+            header = pyjwt.get_unverified_header(token)
+            assert header["kid"] == kid
+            pub = key.public_key()
+            return type("K", (), {"key": pub})()
+
+    monkeypatch.setattr(auth_mod, "PyJWKClient", FakeJWKClient)
+
+    def make_token(**over):
+        now = _time.time()
+        payload = {
+            "iss": "https://login.testnet.fast-auth.com/",
+            "aud": "auth0.jwt.fast-auth.testnet",
+            "sub": "google-oauth2|123456",
+            "iat": now,
+            "exp": now + 600,
+            "email": "user@gmail.com",
+        }
+        payload.update(over)
+        return pyjwt.encode(
+            payload,
+            key,
+            algorithm="RS256",
+            headers={"kid": kid},
+        )
+
+    auth = AuthService(JsonStore(tmp_path / "fastauth"))
+
+    # valid token -> session identity
+    user = auth.verify_fastauth_token(make_token(), network="testnet")
+    assert user["provider"] == "near-auth"
+    assert user["user_id"] == "near-auth:google-oauth2|123456"
+    assert user["name"] == "user@gmail.com"
+
+    # wrong audience rejected
+    with pytest.raises(AuthError, match="verification failed"):
+        auth.verify_fastauth_token(make_token(aud="wrong"), network="testnet")
+
+    # expired rejected
+    with pytest.raises(AuthError, match="verification failed"):
+        auth.verify_fastauth_token(
+            make_token(exp=_time.time() - 10), network="testnet"
+        )
+
+    # wrong issuer rejected
+    with pytest.raises(AuthError, match="verification failed"):
+        auth.verify_fastauth_token(
+            make_token(iss="https://evil.example/"), network="testnet"
+        )
+
+    # unknown network rejected before any fetch
+    with pytest.raises(AuthError, match="unknown NEAR Auth network"):
+        auth.verify_fastauth_token(make_token(), network="mainnet-beta")

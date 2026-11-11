@@ -19,6 +19,8 @@ from typing import Any
 from urllib.parse import urlencode
 
 import httpx
+import jwt
+from jwt import PyJWKClient
 
 from src.storage import JsonStore, utcnow
 
@@ -29,6 +31,19 @@ NEAR_RPC_URL = "https://rpc.mainnet.near.org"
 NEP413_TAG = 2**31 + 413
 SESSION_COOKIE = "nexscrow_session"
 _B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
+
+# NEAR Auth (fast-auth) Auth0 domains/audiences, from
+# @fast-auth-near/javascript-provider FAST_AUTH_AUTH0_DEFAULTS.
+FAST_AUTH_NETWORKS = {
+    "mainnet": {
+        "domain": "login.auth.near.org",
+        "signing_audience": "auth0.jwt.fast-auth.near",
+    },
+    "testnet": {
+        "domain": "login.testnet.fast-auth.com",
+        "signing_audience": "auth0.jwt.fast-auth.testnet",
+    },
+}
 
 
 class AuthError(Exception):
@@ -340,4 +355,39 @@ class AuthService:
             "provider": "google",
             "user_id": f"google:{claims['sub']}",
             "name": claims.get("email") or claims.get("name") or "Google user",
+        }
+
+    # ------------------------------------------------------- NEAR Auth
+
+    def verify_fastauth_token(self, token: str, network: str = "testnet") -> dict:
+        """Verify a NEAR Auth (fast-auth) Auth0 access token against the
+        Auth0 JWKS and return the session identity. The token is requested
+        by the frontend for the network's signing audience via
+        getTokenSilently; only Auth0's own signed tokens pass."""
+        if network not in FAST_AUTH_NETWORKS:
+            raise AuthError(f"unknown NEAR Auth network: {network}")
+        domain = FAST_AUTH_NETWORKS[network]["domain"]
+        audience = FAST_AUTH_NETWORKS[network]["signing_audience"]
+        try:
+            jwks_client = PyJWKClient(f"https://{domain}/.well-known/jwks.json")
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+            claims = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=audience,
+                issuer=f"https://{domain}/",
+                options={"require": ["exp", "iat", "sub", "aud", "iss"]},
+            )
+        except jwt.PyJWTError as exc:
+            raise AuthError(f"NEAR Auth token verification failed: {exc}") from exc
+        except Exception as exc:  # network/JWKS errors
+            raise AuthError(f"NEAR Auth verification unavailable: {exc}") from exc
+        sub = claims.get("sub")
+        if not sub:
+            raise AuthError("NEAR Auth token has no subject")
+        return {
+            "provider": "near-auth",
+            "user_id": f"near-auth:{sub}",
+            "name": claims.get("email") or claims.get("name") or sub,
         }

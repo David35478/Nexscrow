@@ -80,10 +80,20 @@ Three options, all issuing the same server-side session (HttpOnly cookie):
   [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials),
   and register `<your-domain>/api/auth/google/callback` as an authorized
   redirect URI. The button only appears when these are configured.
+- **Continue with Google (NEAR Auth)** — NEAR's official social login
+  (docs.near.org "NEAR Auth"): Auth0 Google sign-in with an MPC-derived
+  NEAR account, no wallet extension needed. Works out of the box on testnet
+  with the shared demo client ID (`near_auth` in `config.yaml`); for
+  mainnet, request approved Auth0 credentials and set `NEAR_AUTH_CLIENT_ID`
+  + `NEAR_AUTH_NETWORK=mainnet`. The signing-audience token is verified
+  server-side against the Auth0 JWKS (`POST /api/auth/fastauth/verify`).
 - **Connect NEAR Wallet** — NEAR Connect (`@hot-labs/near-connect`, per
   docs.near.org): clicking pops up the supported-wallet picker automatically —
   HOT Wallet, Meteor, Intear, Ledger, MyNearWallet, OKX, NEAR Mobile and more
-  (wallet-selector modal kept as fallback). The backend issues a one-time nonce; your wallet
+  (the deprecated `@near-wallet-selector` fallback was removed; the
+  connector is initialized with `features.signMessage: true` so only
+  message-signing wallets are listed, per the docs). The backend issues a
+  one-time nonce; your wallet
   signs it with an access key; the signature is Ed25519-verified and the
   public key is confirmed against the account on NEAR mainnet RPC. No
   private key ever leaves your wallet.

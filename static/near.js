@@ -1,14 +1,15 @@
-/* NEAR wallet connect.
-   Primary: NEAR Connect (@hot-labs/near-connect) — connector.connect() opens
-   the supported-wallet modal. Login is driven by the connector's
-   wallet:signIn event and getConnectedWallet() restore (the documented
-   docs.near.org pattern), so a closed modal never orphans an approved wallet.
-   Fallback: wallet-selector modal. Both finish with a NEP-413 signMessage
-   challenge verified by the backend. */
+/* NEAR wallet + NEAR Auth (Google) login.
+   Wallet: NEAR Connect (@hot-labs/near-connect) per docs.near.org — the
+   connector is initialized with features.signMessage so only wallets that
+   support NEP-413 message signing appear. Login is driven by the
+   wallet:signIn event and getConnectedWallet() restore. (The deprecated
+   @near-wallet-selector fallback was removed per the docs.)
+   Google: NEAR Auth (fast-auth) — Auth0 Google login producing an
+   MPC-derived NEAR account; the raw signing-audience token is verified
+   server-side against the Auth0 JWKS. */
 
 let connector = null;   // NEAR Connect instance
-let selector = null;    // wallet-selector fallback instance
-let selectorModal = null;
+let fastAuthProvider = null;  // NEAR Auth provider
 let connectPending = false;
 let loginInFlight = false;
 
@@ -30,22 +31,32 @@ async function getConfig() {
   return fetch("/api/config").then((r) => r.json());
 }
 
-async function primaryAccount(wallet) {
-  try {
-    const accounts = await wallet.getAccounts();
-    return accounts && accounts.length ? accounts[0].accountId : null;
-  } catch {
-    return null;
-  }
+/* ------------------------------------------------------ wallet login */
+
+async function loadConnector() {
+  if (connector) return connector;
+  const config = await getConfig();
+  const { NearConnector } = await import("https://esm.sh/@hot-labs/near-connect");
+  connector = new NearConnector({
+    network: config.auth.near_network || "mainnet",
+    // docs.near.org: only show wallets that support message signing
+    features: {
+      signMessage: true,
+    },
+  });
+  connector.on("wallet:signIn", (payload) => {
+    if (payload && payload.wallet) completeLogin(payload.wallet);
+  });
+  return connector;
 }
 
 async function completeLogin(wallet) {
-  // The signIn event and the connect() promise can both fire for one login;
-  // the guard keeps the second from consuming a second challenge.
+  // The signIn event and the connect() promise can both fire for one login.
   if (loginInFlight) return;
   loginInFlight = true;
   try {
-    const accountId = await primaryAccount(wallet);
+    const accounts = await wallet.getAccounts().catch(() => []);
+    const accountId = accounts && accounts.length ? accounts[0].accountId : null;
     if (!accountId) throw new Error("wallet returned no account");
     const challenge = await fetch("/api/auth/near/init", { method: "POST" })
       .then((r) => r.json());
@@ -55,8 +66,6 @@ async function completeLogin(wallet) {
       nonce: b64urlToBytes(challenge.nonce),
     };
     if (wallet.type === "browser") {
-      // Redirect wallets sign, then return to /near-callback with the
-      // signature attached.
       signArgs.callbackUrl =
         `${location.origin}/near-callback?challenge=${challenge.nonce}`;
       await wallet.signMessage(signArgs);
@@ -85,30 +94,11 @@ async function completeLogin(wallet) {
   }
 }
 
-/* ------------------------------------------------------------ NEAR Connect */
-
-async function loadConnector() {
-  if (connector) return connector;
-  const config = await getConfig();
-  const { NearConnector } = await import("https://esm.sh/@hot-labs/near-connect");
-  connector = new NearConnector({
-    network: config.auth.near_network || "mainnet",
-  });
-  // Documented pattern: the connector announces wallet sign-in. Driving the
-  // login from this event means an approval always completes the login, even
-  // if the selection modal promise settles late or rejects when it closes.
-  connector.on("wallet:signIn", (payload) => {
-    if (payload && payload.wallet) completeLogin(payload.wallet);
-  });
-  return connector;
-}
-
 async function connectedWalletOrNull() {
-  // Restore path (docs: getConnectedWallet during initialization).
   try {
     const connected = await connector.getConnectedWallet();
     if (connected && connected.wallet) {
-      const accounts = connected.accounts || await connected.wallet.getAccounts().catch(() => []);
+      const accounts = connected.accounts || [];
       if (accounts && accounts.length) return connected.wallet;
     }
   } catch {
@@ -117,53 +107,6 @@ async function connectedWalletOrNull() {
   return null;
 }
 
-/* --------------------------------------------------- wallet-selector fallback */
-
-async function loadSelector() {
-  if (selector) return selector;
-  const [core, mynear, meteor] = await Promise.all([
-    import("https://esm.sh/@near-wallet-selector/core"),
-    import("https://esm.sh/@near-wallet-selector/my-near-wallet"),
-    import("https://esm.sh/@near-wallet-selector/meteor-wallet"),
-  ]);
-  const config = await getConfig();
-  selector = await core.setupWalletSelector({
-    network: config.auth.near_network || "mainnet",
-    modules: [mynear.setupMyNearWallet(), meteor.setupMeteorWallet()],
-  });
-  selector.on("signedIn", async () => {
-    try {
-      const wallet = await selector.wallet();
-      if ((await wallet.getAccounts().catch(() => [])).length) {
-        await completeLogin(wallet);
-      }
-    } catch (err) {
-      showErr(err);
-    }
-  });
-  return selector;
-}
-
-async function selectorFlow() {
-  const config = await getConfig();
-  await loadSelector();
-  const wallet = await selector.wallet().catch(() => null);
-  if (wallet && (await wallet.getAccounts().catch(() => [])).length) {
-    await completeLogin(wallet);
-    return;
-  }
-  if (!selectorModal) {
-    const { setupModal } = await import("https://esm.sh/@near-wallet-selector/modal-ui-js");
-    selectorModal = setupModal(selector, {
-      contractId: config.auth.near_sign_in_contract || "intents.near",
-      theme: "light",
-    });
-  }
-  selectorModal.show();
-}
-
-/* ----------------------------------------------------------------- entry */
-
 async function connectNearWallet() {
   const btn = document.getElementById("near-btn");
   if (connectPending) return;
@@ -171,43 +114,20 @@ async function connectNearWallet() {
   try {
     btn.disabled = true;
     btn.textContent = "Opening wallet…";
-    let nearConnectReady = true;
-    try {
-      await loadConnector();
-    } catch {
-      nearConnectReady = false; // module/network unavailable -> fallback
-    }
-    if (!nearConnectReady) {
-      await selectorFlow();
-      return;
-    }
-    // Already-approved wallet (e.g. user signed in previously)? Skip the
-    // picker and log straight in.
+    await loadConnector();
     const existing = await connectedWalletOrNull();
     if (existing) {
       await completeLogin(existing);
       return;
     }
-    // connector.connect() opens the NEAR Connect wallet-selection modal.
-    // If it settles null/rejects when the modal closes, the wallet:signIn
-    // event still completes the login; only surface an error when neither
-    // path fired. The race keeps the button from hanging on a dismissal
-    // (connect() only settles once a wallet is chosen).
-    let modalErr = null;
+    // Modal promise only settles once a wallet is chosen; a dismissal leaves
+    // it pending, so race with a timeout — the signIn event still completes
+    // any approval either way.
     const wallet = await Promise.race([
-      connector.connect().catch((err) => {
-        modalErr = err;
-        return null;
-      }),
+      connector.connect().catch(() => null),
       new Promise((resolve) => setTimeout(() => resolve(null), 9000)),
     ]);
-    if (wallet) {
-      await completeLogin(wallet);
-    } else if (modalErr && !loginInFlight) {
-      // no signIn event either - show the real reason instead of silently
-      // leaving the user logged out
-      showErr(modalErr);
-    }
+    if (wallet && !loginInFlight) await completeLogin(wallet);
   } finally {
     connectPending = false;
     btn.disabled = false;
@@ -215,37 +135,68 @@ async function connectNearWallet() {
   }
 }
 
-// Restore an already-approved wallet after page reloads: if the wallet says
-// we are signed in but no nexscrow session cookie exists, complete the login.
+// Restore an approved wallet on load (no session cookie yet).
 async function restoreSession() {
   try {
     await loadConnector();
     const wallet = await connectedWalletOrNull();
     if (wallet) await completeLogin(wallet);
   } catch {
-    /* wallet not connected; nothing to restore */
+    /* wallet not connected */
+  }
+}
+
+/* ------------------------------------------ NEAR Auth (Google login) */
+
+async function nearAuthLogin() {
+  const btn = document.getElementById("fastauth-btn");
+  try {
+    btn.disabled = true;
+    btn.textContent = "Opening Google…";
+    const config = await getConfig();
+    const na = config.near_auth;
+    if (!na || !na.client_id) {
+      throw new Error("NEAR Auth is not configured");
+    }
+    if (!fastAuthProvider) {
+      const { JavascriptProvider } = await import(
+        "https://esm.sh/@fast-auth-near/javascript-provider"
+      );
+      fastAuthProvider = new JavascriptProvider({
+        network: na.network || "testnet",
+        clientId: na.client_id,
+      });
+    }
+    // Popup Google login; resolves after Auth0 returns.
+    await fastAuthProvider.login();
+    // Raw token for the signing audience — verified by our backend against
+    // the Auth0 JWKS.
+    const { FAST_AUTH_AUTH0_DEFAULTS } = await import(
+      "https://esm.sh/@fast-auth-near/javascript-provider"
+    );
+    const audience = (FAST_AUTH_AUTH0_DEFAULTS[na.network] || {}).signingAudience;
+    const token = await fastAuthProvider.client.getTokenSilently({
+      authorizationParams: { audience },
+    });
+    const res = await fetch("/api/auth/fastauth/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, network: na.network || "testnet" }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
+    location.href = "/";
+  } catch (err) {
+    showErr(err);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Continue with Google";
   }
 }
 
 if (!document.cookie.includes("nexscrow_session")) {
-  // defer so the landing page renders first
   (window.requestIdleCallback || setTimeout)(() => restoreSession());
-  // legacy wallet-selector restore (redirect wallets persist their state)
-  (function autoResume() {
-    try {
-      if (!localStorage.getItem("near-wallet-selector:wallets")) return;
-      loadSelector()
-        .then(async () => {
-          const wallet = await selector.wallet().catch(() => null);
-          if (wallet && (await wallet.getAccounts().catch(() => [])).length) {
-            await completeLogin(wallet);
-          }
-        })
-        .catch(() => {});
-    } catch {
-      /* ignore */
-    }
-  })();
 }
 
 window.connectNearWallet = connectNearWallet;
+window.nearAuthLogin = nearAuthLogin;

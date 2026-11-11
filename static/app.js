@@ -112,6 +112,10 @@ const postForm = $("#post-job");
     if (config.auth.google_configured) {
       $("#google-btn").classList.remove("hidden");
     }
+    if (config.near_auth && config.near_auth.client_id) {
+      $("#fastauth-btn").classList.remove("hidden");
+      $("#fastauth-btn").addEventListener("click", () => window.nearAuthLogin());
+    }
     if (user) {
       $("#login-panel").hidden = true;
       $("#post-panel").hidden = false;

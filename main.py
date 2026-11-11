@@ -19,6 +19,7 @@ from src.constraints import ConstraintError
 from src.env import load_env
 from src.escrow import ReleaseBlocked
 from src.jobs import JobNotFound
+from src.near_chain import NearChainError, NearChainTransportError
 from src.payment import PaymentError
 from src.system import NexscrowSystem
 
@@ -55,6 +56,11 @@ class DemoCycle(BaseModel):
 
 class KillSwitch(BaseModel):
     enabled: bool
+
+
+class DepositConfirm(BaseModel):
+    tx_hash: str = Field(min_length=8, max_length=128)
+    signer_id: str = Field(default="", max_length=128)
 
 
 class NearVerify(BaseModel):
@@ -110,6 +116,8 @@ def create_app(
     for exc, code in (
         (ConstraintError, 400),
         (PaymentError, 400),
+        (NearChainTransportError, 502),
+        (NearChainError, 400),
         (AuthError, 400),
         (JobNotFound, 404),
         (ReleaseBlocked, 409),
@@ -297,7 +305,7 @@ def create_app(
             else None
         )
         view["live_agents_ready"] = bool(os.environ.get("NEAR_AI_API_KEY"))
-        view["real_escrow_ready"] = bool(os.environ.get("INTENTS_API_KEY"))
+        view["live_payouts_ready"] = bool(os.environ.get("ESCROW_PRIVATE_KEY"))
         return view
 
     @app.get("/api/jobs")
@@ -338,6 +346,20 @@ def create_app(
         user = require_user(request)
         return system.approve_deposit(job_id, client_id=user["user_id"])
 
+    @app.post("/api/jobs/{job_id}/deposit/prepare")
+    async def prepare_deposit(job_id: str, request: Request) -> dict:
+        """Return the wallet-payable deposit: escrow account + exact yoctoNEAR."""
+        user = require_user(request)
+        return system.prepare_deposit(job_id, client_id=user["user_id"])
+
+    @app.post("/api/jobs/{job_id}/deposit/confirm")
+    async def confirm_deposit(job_id: str, body: DepositConfirm, request: Request) -> dict:
+        """Verify the wallet-signed NEAR deposit on-chain and lock escrow."""
+        user = require_user(request)
+        return system.confirm_deposit(
+            job_id, body.tx_hash, body.signer_id, client_id=user["user_id"]
+        )
+
     @app.post("/api/jobs/{job_id}/accept")
     async def accept_job(job_id: str, body: AgentAction) -> dict:
         return system.accept_job(job_id, body.agent_id)
@@ -369,8 +391,9 @@ def create_app(
         return system.dispute(job_id, body.reason, client_id=user["user_id"])
 
     @app.post("/api/jobs/{job_id}/dispute/resolve")
-    async def resolve(job_id: str, body: ResolveDispute) -> dict:
-        return system.resolve(job_id, body.outcome)
+    async def resolve(job_id: str, body: ResolveDispute, request: Request) -> dict:
+        user = require_user(request)
+        return system.resolve(job_id, body.outcome, client_id=user["user_id"])
 
     @app.get("/api/reputation")
     async def reputation(agent_id: str | None = None) -> dict:
@@ -395,7 +418,8 @@ def create_app(
         return system.cancel_job_as(job_id, client_id=user["user_id"])
 
     @app.post("/api/demo/cycle")
-    async def demo_cycle(body: DemoCycle) -> dict:
+    async def demo_cycle(body: DemoCycle, request: Request) -> dict:
+        require_user(request)
         return system.run_demo_cycle(body.title, body.description, body.reward_usd)
 
     @app.get("/api/ledger")

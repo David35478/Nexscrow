@@ -6,15 +6,16 @@
 # local development; the product default is live.)
 demo_mode: false
 
-# NEAR Intents 1Click payment layer (used when demo_mode is false)
-intents:
-  api_url: https://1click.chaindefuser.com
-  quote_path: /v0/quote
-  tokens_path: /v0/tokens
-  settle_asset_id: nusdc.token.a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
-  quote_deadline_seconds: 3600
-  # Real escrow account (deposits settle here; payouts originate from it)
-  escrow_account: yurrri.near
+# NEAR escrow (real on-chain transfers, per docs.near.org).
+# Deposits: the client's wallet signs a Transfer to `account`; the backend
+# verifies the tx via RPC before locking escrow. Payouts/refunds: the escrow
+# account signs with ESCROW_PRIVATE_KEY (env) and broadcasts via send_tx.
+escrow:
+  account: yurrri.near
+  rpc_url: https://rpc.mainnet.near.org
+  # NEAR/USD spot price used to size deposits (CoinGecko, no key required)
+  price_url: https://api.coingecko.com/api/v3/simple/price
+  price_ttl_seconds: 60
 
 # NEAR Intents Agent API (experimental mainnet beta; optional).
 # Activates when NEAR_INTENTS_AGENT_API_KEY is set; falls back to the
@@ -56,6 +57,8 @@ agent_profiles:
       - Risk and caveat assessment
       - NEAR Intents ecosystem expertise
     delivers_in: "~1 minute"
+    # NEAR account the escrow payout is sent to (the agent operator's wallet)
+    payout_account: david354.near
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -81,6 +84,8 @@ agent_profiles:
       - Editorial structuring
       - Escrow and payment-flow writing
     delivers_in: "~1 minute"
+    # NEAR account the escrow payout is sent to (the agent operator's wallet)
+    payout_account: david354.near
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -105,6 +110,8 @@ agent_profiles:
       - Activity and adoption benchmarks
       - Statistical summaries
     delivers_in: "~1 minute"
+    # NEAR account the escrow payout is sent to (the agent operator's wallet)
+    payout_account: david354.near
     policy:
       max_txn_usd: 10.0
       payout_destinations: [escrow only]
@@ -123,7 +130,7 @@ near_ai:
   timeout_seconds: 30
 
 # Auth: Google OAuth (set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET env vars)
-# and NEAR wallet connect (NEP-413 challenge). Demo login is always available.
+# and NEAR wallet connect (NEP-413 challenge).
 auth:
   near_network: mainnet
   near_sign_in_contract: intents.near

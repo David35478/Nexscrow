@@ -1,4 +1,4 @@
-/* nexscrow frontend: job board, ledger, demo actions. */
+/* nexscrow frontend: job board, ledger, escrow actions. */
 
 const $ = (sel) => document.querySelector(sel);
 const fmt = (n) => Number(n).toFixed(2);
@@ -35,11 +35,7 @@ function renderWho() {
   const who = $("#who");
   if (!who) return;
   const chip = $("#session-chip");
-  if (chip) {
-    chip.innerHTML = authUser && authUser.provider === "demo"
-      ? '<span class="badge badge-demo">Demo session · simulated funds</span>'
-      : "";
-  }
+  if (chip) chip.innerHTML = "";
   if (authUser) {
     who.classList.remove("hidden");
     who.innerHTML = `${escapeHtml(authUser.name)} · <a href="#" id="logout-link" style="color:var(--accent)">logout</a>`;
@@ -131,14 +127,6 @@ const postForm = $("#post-job");
       $("#login-panel").hidden = true;
       $("#post-panel").hidden = false;
     }
-    $("#demo-btn").addEventListener("click", async () => {
-      try {
-        await api("/api/auth/demo", { method: "POST", body: "{}" });
-        location.reload();
-      } catch (err) {
-        showResult($("#auth-error"), `✗ ${err.message}`, true);
-      }
-    });
     $("#near-btn").addEventListener("click", () => window.connectNearWallet("my-near-wallet"));
     const authError = new URLSearchParams(location.search).get("auth_error");
     if (authError) {
@@ -166,56 +154,47 @@ const postForm = $("#post-job");
           client: fd.get("client") || null,
         }),
       });
-      showResult($("#post-result"), [
-        `✓ Job ${job.job_id} posted.`,
-        `Deposit ${job.payment_status}: send $${fmt(job.reward_usd)} to ${job.deposit_address}`,
-        `Then approve the transaction below to lock it in escrow.`,
-      ]);
-      const approveBtn = document.createElement("button");
-      approveBtn.className = "btn primary";
-      approveBtn.textContent = "Approve transaction & lock deposit";
-      approveBtn.addEventListener("click", async () => {
-        approveBtn.disabled = true;
+      if (job.simulated) {
+        showResult($("#post-result"), [
+          `✓ Job ${job.job_id} posted (simulated).`,
+          `Approve the deposit below to lock it in escrow.`,
+        ]);
+        const approveBtn = document.createElement("button");
+        approveBtn.className = "btn primary";
+        approveBtn.textContent = "Approve transaction & lock deposit";
+        approveBtn.addEventListener("click", async () => {
+          approveBtn.disabled = true;
+          try {
+            await api(`/api/jobs/${job.job_id}/deposit/approve`, { method: "POST" });
+            showResult($("#post-result"), [
+              `✓ Deposit locked for job ${job.job_id}.`,
+              "An agent can now pick it up on the public board: /dashboard",
+            ]);
+          } catch (err) {
+            showResult($("#post-result"), `✗ ${err.message}`, true);
+            approveBtn.disabled = false;
+          }
+        });
+        $("#post-result").appendChild(approveBtn);
+      } else {
+        // Real escrow: the wallet signs the NEAR deposit transfer itself.
+        showResult($("#post-result"), `✓ Job ${job.job_id} posted. Opening your wallet to sign the escrow deposit…`);
         try {
-          const updated = await api(`/api/jobs/${job.job_id}/deposit/approve`, { method: "POST" });
+          const res = await window.payEscrow(job.job_id);
+          if (res && res.redirected) return; // browser wallet redirects to /near-callback
           showResult($("#post-result"), [
-            `✓ Deposit locked for job ${job.job_id}.`,
+            `✓ Deposit locked on-chain for job ${job.job_id}.`,
             "An agent can now pick it up on the public board: /dashboard",
           ]);
         } catch (err) {
           showResult($("#post-result"), `✗ ${err.message}`, true);
-          approveBtn.disabled = false;
         }
-      });
-      $("#post-result").appendChild(approveBtn);
+      }
     } catch (err) {
       showResult($("#post-result"), `✗ ${err.message}`, true);
     }
   });
 
-  $("#run-demo").addEventListener("click", async () => {
-    const btn = $("#run-demo");
-    btn.disabled = true;
-    btn.textContent = "Running agent cycle…";
-    try {
-      const { job, trace } = await api("/api/demo/cycle", {
-        method: "POST",
-        body: JSON.stringify({}),
-      });
-      const box = $("#demo-result");
-      box.classList.remove("hidden", "error");
-      box.innerHTML =
-        trace
-          .map((t) => `<div class="tl-item"><div class="tl-dot"></div><div class="tl-body"><b>${escapeHtml(t.step)}</b><span>${escapeHtml(t.detail)}</span></div></div>`)
-          .join("") +
-        `<div style="margin-top:10px"><a class="btn small primary" href="/job/${job.job_id}">Open the finished job →</a></div>`;
-    } catch (err) {
-      showResult($("#demo-result"), `✗ ${err.message}`, true);
-    } finally {
-      btn.disabled = false;
-      btn.textContent = "Run the full demo cycle";
-    }
-  });
 }
 
 // -------------------------------------------------------------- dashboard
@@ -231,7 +210,7 @@ if (statsEl) {
       .map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`)
       .join("");
     const kv = [
-      ["Mode", view.constraints.demo_mode ? "demo (simulated money)" : "live"],
+      ["Mode", view.constraints.demo_mode ? "demo" : "live (real NEAR escrow)"],
       ["Kill switch", view.constraints.kill_switch ? "ENGAGED" : "off"],
       ["Max reward / job", `$${fmt(view.constraints.max_job_reward_usd)}`],
       ["Daily payout cap", `$${fmt(view.constraints.max_daily_payout_usd)}`],
@@ -267,7 +246,7 @@ if (statsEl) {
     const pending = (j) => j.payment_status === "pending" && authUser && j.client_id === authUser.user_id;
     const openActions = (j) =>
       pending(j)
-        ? `<button class="btn small primary" data-act="approve">Approve deposit ($${fmt(j.reward_usd)})</button>`
+        ? `<button class="btn small primary" data-act="approve" data-simulated="${j.simulated ? 1 : 0}">${j.simulated ? "Approve" : "Sign deposit in wallet"} ($${fmt(j.reward_usd)})</button>`
         : (j.bids || []).length
           ? (j.bids || []).map((b) => `<span class="bid-tag">${escapeHtml(b.agent_id)}: $${fmt(b.amount_usd)}${j.selected_bid && j.selected_bid.agent_id === b.agent_id ? " ✓ awarded" : ""}</span>`).join(" ")
           : `<button class="btn small primary" data-act="agent-run" ${j.payment_status !== "locked" ? "disabled" : ""}>Agent accepts &amp; delivers</button>`;
@@ -315,7 +294,11 @@ if (statsEl) {
     btn.disabled = true;
     try {
       if (btn.dataset.act === "approve") {
-        await api(`/api/jobs/${id}/deposit/approve`, { method: "POST" });
+        if (btn.dataset.simulated === "1") {
+          await api(`/api/jobs/${id}/deposit/approve`, { method: "POST" });
+        } else {
+          await window.payEscrow(id);
+        }
       } else if (btn.dataset.act === "approve-work") {
         await api(`/api/jobs/${id}/approve-work`, { method: "POST" });
       } else {

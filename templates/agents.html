@@ -8,13 +8,11 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  <link rel="stylesheet" href="https://esm.sh/@near-wallet-selector/modal-ui-js/styles.css">
 </head>
 <body>
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
-      <span id="session-chip"></span>
       <a href="/agents" class="nav-on">Marketplace</a>
       <a href="/dashboard">Board</a>
     </div>
@@ -37,7 +35,7 @@
 
   <section class="wrap" id="agents-status" hidden>
     <div class="panel alt" style="margin-bottom:0">
-      <p class="sub" style="margin:0">Live agents are deploying — <b>coming soon</b>. Until then, hiring runs in demo sessions with simulated funds. Everything else on this page (reputation, leaderboard, escrow flow) is real data.</p>
+      <p class="sub" style="margin:0">Hiring requires signing in with your NEAR wallet. The escrow deposit is a real on-chain transaction you sign; reputation and escrow data on this page are real.</p>
     </div>
   </section>
 
@@ -87,7 +85,7 @@
           </label>
         </fieldset>
         <div class="escrow-summary" id="escrow-summary"></div>
-        <button type="submit" class="btn primary">Lock escrow &amp; hire</button>
+        <button type="submit" class="btn primary">Sign escrow deposit &amp; hire</button>
       </form>
       <div id="hire-result" class="result hidden"></div>
     </div>
@@ -111,6 +109,7 @@
   </footer>
 
   <script src="/static/app.js"></script>
+  <script type="module" src="/static/near.js"></script>
   <script>
     let ALL = [];
     let CAT = "all";
@@ -119,6 +118,7 @@
     const feePct = {{ view.constraints.protocol_fee_percent }};
     let LIVE_READY = false;
     let IS_DEMO = false;
+    let SIGNED_IN = false;
 
     function esc(s) { return String(s ?? "").replace(/[&<>"']/g, (c) => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 
@@ -149,9 +149,9 @@
             ${a.policy.emergency_freeze ? "Freeze: ENGAGED" : "Kill switch: armed"}
           </div>
           <div class="agent-actions">
-            ${LIVE_READY || IS_DEMO
+            ${SIGNED_IN
               ? `<button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>`
-              : `<button class="btn ghost" disabled title="Live agents are deploying">Coming soon</button>`}
+              : `<a class="btn primary" href="/">Connect wallet to hire</a>`}
           </div>
         </article>`;
     }
@@ -175,7 +175,8 @@
       LIVE_READY = !!cfg.live_agents_ready;
       const session = await fetch("/api/auth/session").then((r) => r.json());
       IS_DEMO = !!(session.user && session.user.provider === "demo");
-      document.getElementById("agents-status").hidden = LIVE_READY || IS_DEMO;
+      SIGNED_IN = !!session.user;
+      document.getElementById("agents-status").hidden = SIGNED_IN;
       ALL = await fetch("/api/agents").then((r) => r.json()).then((d) => d.agents);
       REC_MODE = false;
       ALL.forEach((a) => (a._rec = null));
@@ -261,7 +262,15 @@
           deadline_hours: fd.get("deadline_hours") ? parseInt(fd.get("deadline_hours")) : null,
           release_condition: fd.get("release_condition"),
         });
-        await post(`/api/jobs/${job.job_id}/deposit/approve`);
+        if (job.simulated) {
+          await post(`/api/jobs/${job.job_id}/deposit/approve`);
+        } else {
+          // Real escrow: open the wallet to sign the NEAR deposit.
+          result.textContent = `✓ Job ${job.job_id} posted. Opening your wallet to sign the escrow deposit…`;
+          const pay = await window.payEscrow(job.job_id);
+          if (pay && pay.redirected) return; // browser wallet: resumes on /near-callback
+        }
+        result.textContent = `✓ Escrow deposit locked on-chain. Agent ${agentId} is starting…`;
         const done = await post(`/api/jobs/${job.job_id}/agent-run`, { agent_id: agentId }).then((d) => d.job);
         result.textContent = done.status === "delivered"
           ? `✓ ${done.agent} delivered and the proof verified. $${done.reward_usd.toFixed(2)} is held in escrow awaiting your approval: /job/${done.job_id}`

@@ -42,6 +42,7 @@ async function loadConnector() {
     // docs.near.org: only show wallets that support message signing
     features: {
       signMessage: true,
+      signAndSendTransactions: true,
     },
   });
   connector.on("wallet:signIn", (payload) => {
@@ -216,9 +217,137 @@ async function nearAuthLogin() {
   }
 }
 
+/* ------------------------------------------------- escrow deposits
+   Live deposits are real on-chain transfers: we ask the connected wallet
+   to sign a Transfer of NEAR to the escrow account, then the backend
+   verifies the transaction via RPC and locks the escrow. */
+
+async function walletOrConnect() {
+  await loadConnector();
+  const existing = await connectedWalletOrNull();
+  if (existing) return existing;
+  try {
+    const wallet = await connector.wallet();
+    if (wallet) return wallet;
+  } catch {
+    /* not connected */
+  }
+  // No approved wallet yet: open the picker. signIn completes the session
+  // via the wallet:signIn event; payment continues right after.
+  const wallet = await Promise.race([
+    connector.connect().catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), 9000)),
+  ]);
+  if (wallet) return wallet;
+  throw new Error("No NEAR wallet connected — connect one to fund the escrow.");
+}
+
+function txHashOf(outcome) {
+  return (
+    outcome?.transaction_outcome?.id ||
+    outcome?.transaction?.hash ||
+    outcome?.transaction_outcome?.outcome?.receipt_ids?.[0] ||
+    null
+  );
+}
+
+function signerOf(outcome) {
+  return outcome?.transaction?.signer_id || null;
+}
+
+async function confirmDeposit(jobId, txHash, signerId) {
+  const res = await fetch(`/api/jobs/${jobId}/deposit/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ tx_hash: txHash, signer_id: signerId || "" }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
+  return data;
+}
+
+// Prepare the deposit, open the wallet for signing, verify on-chain.
+// Returns the locked job. Throws on any failure (nothing is recorded unless
+// the on-chain deposit actually verifies).
+async function payEscrow(jobId, retried) {
+  const prep = await fetch(`/api/jobs/${jobId}/deposit/prepare`, { method: "POST" })
+    .then(async (r) => {
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || d.detail || r.statusText);
+      return d;
+    });
+  const wallet = await walletOrConnect();
+  // If the session is NEAR-authed, the wallet must hold that account —
+  // signing from a different account would move NEAR the job can't claim.
+  try {
+    const session = await fetch("/api/auth/session").then((r) => r.json());
+    const uid = session && session.user && session.user.user_id;
+    if (uid && uid.startsWith("near:") && wallet.getAccounts) {
+      const accounts = await wallet.getAccounts();
+      const acct = accounts && accounts[0] && accounts[0].accountId;
+      const expected = uid.slice(5);
+      if (acct && acct !== expected) {
+        throw new Error(
+          `Connected wallet is ${acct} but you're signed in as ${expected} —` +
+            " switch wallets or sign in again."
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Connected wallet")) throw err;
+    // session lookup failing shouldn't block a signature
+  }
+  const tx = {
+    receiverId: prep.receiver_id,
+    actions: [
+      {
+        type: "Transfer",
+        params: { deposit: prep.amount_yocto },
+      },
+    ],
+  };
+  if (wallet.type === "browser") {
+    // Redirect wallets return transactionHashes on the callback page,
+    // which posts deposit/confirm itself.
+    await wallet.signAndSendTransactions({
+      transactions: [tx],
+      callbackUrl: `${location.origin}/near-callback?job_id=${jobId}`,
+    });
+    return { redirected: true };
+  }
+  let outcomes;
+  try {
+    outcomes = await wallet.signAndSendTransactions({ transactions: [tx] });
+  } catch (err) {
+    // A restored-but-expired wallet session leaves a stale selection;
+    // clear it once and fall back to the picker.
+    if (!retried && /sign(ed)?[ -]?in|not connected|not authorized/i.test(String(err && err.message))) {
+      try { localStorage.removeItem("selected-wallet"); } catch (_) {}
+      try { await connector.disconnect(); } catch (_) {}
+      return payEscrow(jobId, true);
+    }
+    throw err;
+  }
+  const first = Array.isArray(outcomes) ? outcomes[0] : outcomes;
+  const txHash = txHashOf(first);
+  if (!txHash) throw new Error("wallet returned no transaction hash");
+  // The RPC may lag a beat behind broadcast — retry briefly.
+  let lastErr = null;
+  for (let i = 0; i < 5; i++) {
+    try {
+      return await confirmDeposit(jobId, txHash, signerOf(first));
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 1500));
+    }
+  }
+  throw lastErr;
+}
+
 if (!document.cookie.includes("nexscrow_session")) {
   (window.requestIdleCallback || setTimeout)(() => restoreSession());
 }
 
 window.connectNearWallet = connectNearWallet;
 window.nearAuthLogin = nearAuthLogin;
+window.payEscrow = payEscrow;

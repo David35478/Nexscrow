@@ -31,6 +31,7 @@ class Constraints:
             raw.get("default_dispute_window_minutes", 30)
         )
         self.intents = dict(raw.get("intents", {}))
+        self.escrow = dict(raw.get("escrow", {}))
         self.work_engine = str(raw.get("work_engine", "demo")).lower()
         self.near_ai = dict(raw.get("near_ai", {}))
         self.auth = dict(raw.get("auth", {}))

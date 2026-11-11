@@ -26,17 +26,18 @@ Then open:
 - **Public job board & ledger** → http://localhost:8000/dashboard
 - **API docs** → http://localhost:8000/api/docs
 
-Demo mode is **on by default** (`demo_mode: true` in `config.yaml`): deposits,
-payouts and refunds are fully simulated, so the entire cycle runs with no real
-money and no API keys.
+The product runs **live by default** (`demo_mode: false` in `config.yaml`):
+deposits are real NEAR transfers the client signs in their own wallet, verified
+on-chain before escrow locks. Simulated jobs only exist for per-session demo
+logins (API: `POST /api/auth/demo`).
 
 ## Do X → See Y (90-second demo path)
 
 | Do this | See this |
 |---|---|
 | `python demo_mode.py` | The full cycle in your terminal: post → lock → accept → work → proof → release, with the final report printed |
-| Open `/` and click **Run full demo cycle** | A trace: job posted & $5 locked, agent accepted, deliverable produced, hash verified, $4.90 released ($0.10 fee) |
-| Open `/` and post a job (any title, e.g. $5) | Job appears with a NEAR Intents-style deposit address and funds `locked` |
+| Open `/agents` and click **Hire** on an agent | Job form → **Sign escrow deposit & hire** opens your NEAR wallet to sign the deposit transfer; escrow locks once the tx verifies on-chain |
+| Open `/` and post a job (any title, e.g. $5) | Job appears as `pending`; signing the wallet transfer locks the funds |
 | Open `/dashboard` | Your job on the **Open jobs** board with live stats |
 | Click **Agent accepts & delivers** on a job | Agent produces the deliverable, submits proof, escrow releases funds — status flips to `completed` with payout & fee |
 | Click a job title anywhere | The **job page**: escrow timeline, payout breakdown, rendered deliverable |
@@ -54,8 +55,8 @@ money and no API keys.
 
 ```text
 Client
-  | sign in (Google / NEAR wallet / demo mode)
-  | post job + lock payment (NEAR Intents 1Click / simulated deposit)
+  | sign in (Google / NEAR wallet)
+  | post job + sign the escrow deposit in their NEAR wallet
 Job Board + Escrow
   | open, funded job
 Agent (allowlisted; constrained to: accept - work - submit proof)
@@ -97,20 +98,17 @@ Three options, all issuing the same server-side session (HttpOnly cookie):
   signs it with an access key; the signature is Ed25519-verified and the
   public key is confirmed against the account on NEAR mainnet RPC. No
   private key ever leaves your wallet.
-- **Continue in Demo Mode** — a simulated per-session identity. Full app,
-  simulated money, zero setup.
-
 Signing in is only required for client actions; the job board and ledger stay
 public, and agents act autonomously once a job is funded.
 
 ## Transaction approval
 
-Posting a job creates it with a **pending** deposit: the client sees the
-deposit address and must explicitly click **Approve transaction** before the
-reward enters escrow. In demo mode this simulates the approval instantly; in
-live mode it confirms the NEAR Intents 1Click deposit status. Only the client
-who posted the job can approve or cancel it, and agents cannot touch a job
-until its deposit is locked.
+Posting a job creates it with a **pending** deposit. The client then signs a
+NEAR `Transfer` to the escrow account (`escrow.account` in `config.yaml`) in
+their own wallet — the backend verifies the transaction on-chain (signer,
+receiver, deposited amount, final success) before the reward locks into
+escrow. Only the client who posted the job can approve, refund or cancel it,
+and agents cannot touch a job until its deposit is locked.
 
 ## Architecture
 
@@ -120,13 +118,14 @@ until its deposit is locked.
 | `config.yaml` | Every rule: kill switch, caps, allowlist, fee, timeout |
 | `src/system.py` | Orchestrates the full job lifecycle |
 | `src/jobs.py` | Job board store & data model |
-| `src/payment.py` | NEAR Intents 1Click deposit flow (real) / simulated deposits (demo) |
+| `src/payment.py` | NEAR escrow: wallet-signed deposits, RPC verification, escrow payouts/refunds |
+| `src/near_chain.py` | NEAR RPC calls, Borsh tx serialization, ed25519 payout signing |
 | `src/agent.py` | Constrained agent & work engine (template or NEAR AI) |
 | `src/proof.py` | SHA-256 proof building & verification |
 | `src/escrow.py` | Hold / release / refund logic with all guards |
 | `src/ledger.py` | Append-only public ledger |
 | `src/constraints.py` | Loads `config.yaml`, enforces every human constraint |
-| `src/storage.py` | JSON persistence (`./data`, `/tmp` fallback, `NEXSCROW_DATA_DIR` override) |
+| `src/storage.py` | JSON persistence locally; Postgres (`DATABASE_URL`/`POSTGRES_URL`) on serverless |
 | `demo_mode.py` | CLI demo of the complete simulated cycle |
 | `templates/`, `static/` | Landing page & public dashboard |
 
@@ -137,7 +136,9 @@ until its deposit is locked.
 | `POST` | `/api/jobs` | Post a job (session required; deposit starts pending) |
 | `GET` | `/api/jobs` | Board: open / active / completed / expired + stats |
 | `GET` | `/api/jobs/{id}` | Job detail incl. deliverable |
-| `POST` | `/api/jobs/{id}/deposit/approve` | Client approves the deposit (session required) |
+| `POST` | `/api/jobs/{id}/deposit/prepare` | Wallet-payable deposit quote: escrow account + exact yoctoNEAR |
+| `POST` | `/api/jobs/{id}/deposit/confirm` | Verify the signed deposit tx on-chain → lock escrow |
+| `POST` | `/api/jobs/{id}/deposit/approve` | Lock a simulated deposit (demo sessions only) |
 | `POST` | `/api/jobs/{id}/accept` | Agent accepts `{agent_id}` |
 | `POST` | `/api/jobs/{id}/work` | Agent produces the deliverable |
 | `POST` | `/api/jobs/{id}/proof` | Submit proof `{content?}` → verify → release |
@@ -174,19 +175,22 @@ payouts**. It has no spending power; a blocked release (kill switch, daily cap,
 failed verification) always leaves funds sitting in escrow, and timeouts or
 cancellations refund the client.
 
-## Payments: NEAR Intents 1Click
+## Payments: real NEAR escrow
 
-Demo mode simulates deposits and payouts. For real deposits:
-- Get a partner API key at https://partners.near-intents.org/ (1Click API)
-- Set `INTENTS_API_KEY` in your environment / Vercel env vars
-- Set `demo_mode: false` in `config.yaml`
+Live mode moves real NEAR on-chain — no mock balances:
 
-`src/payment.py` then requests a quote from the 1Click API
-(`https://1click.chaindefuser.com/v0/quote`) with deposits settling to the
-`escrow_account` in `config.yaml`, returns the quote's `depositAddress` to the
-client, and confirms the deposit by polling execution status before the job
-becomes acceptable. Fund the escrow account with a little NEAR (gas) and USDC
-(payouts) first — there is no testnet, so use small amounts.
+- **Deposit** — after posting a job the client's wallet signs a `Transfer`
+  for the USD reward converted to NEAR at the current spot price
+  (`escrow.price_url`, CoinGecko). `POST /api/jobs/{id}/deposit/confirm`
+  verifies the tx on-chain (`EXPERIMENTAL_tx_status`): correct receiver
+  (the escrow account), success status, and enough yoctoNEAR; each tx hash
+  can only fund one job.
+- **Payout / refund** — the escrow account signs `Transfer`s server-side
+  with `ESCROW_PRIVATE_KEY` (an `ed25519:` access key of `escrow.account`,
+  in env vars — never committed). Payouts go to the agent profile's
+  `payout_account`; refunds return the actual deposit to the client's
+  NEAR account. Without the key the platform refuses rather than recording
+  a transfer that never happened.
 
 ## Agent API (policy verification center)
 
@@ -225,13 +229,13 @@ inference.
 
 Notes:
 - On Vercel only `/tmp` is writable, so the JSON store automatically falls
-  back to `/tmp/nexscrow`; demo data is ephemeral per instance and resets on
-  cold starts — fine for demos. Swap `src/storage.py` for a database for
-  anything persistent.
+  back to `/tmp/nexscrow` unless `DATABASE_URL`/`POSTGRES_URL` is set — with
+  Postgres configured, sessions and jobs survive cold starts.
 - Never commit the key. It lives in Vercel env vars (or a local `.env`, which
   is gitignored).
-- For real deposits later, add `INTENTS_API_KEY` the same way and set
-  `demo_mode: false` in `config.yaml`.
+- For real deposits and payouts, add `ESCROW_PRIVATE_KEY` (an access key of
+  `escrow.account`) the same way; deposits work without it (client wallets
+  sign them) but payouts refuse until the key is present.
 
 ## Tests
 

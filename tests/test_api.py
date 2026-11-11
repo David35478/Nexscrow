@@ -61,18 +61,16 @@ def test_demo_session_creates_simulated_jobs(tmp_path):
     assert job["simulated"] is True
     assert "@intents-demo" in job["deposit_address"]
 
-    # a live (non-demo) job via the system layer: without a 1Click key the
-    # platform refuses rather than faking a deposit address (covered by
-    # test_live_job_needs_real_deposit_address below)
+    # a live (non-demo) job pays the real escrow account — the client's
+    # wallet signs the deposit transfer (see test_payment.py)
 
 
-def test_live_job_needs_real_deposit_address(tmp_path):
-    from src.payment import PaymentError
-
+def test_live_job_deposit_address_is_escrow_account(tmp_path):
     c = client(tmp_path)
     sys_ = c.app.state.system
-    with pytest.raises(PaymentError, match="INTENTS_API_KEY"):
-        sys_.post_job("Live job", "", 3.0, simulated=False)
+    job = sys_.post_job("Live job", "", 3.0, simulated=False)
+    assert job["simulated"] is False
+    assert job["deposit_address"] == "yurrri.near"
 
 
 def test_api_full_lifecycle_with_approval(tmp_path):

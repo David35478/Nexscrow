@@ -53,8 +53,9 @@ def test_expired_session_rejected(tmp_path):
 def test_challenge_is_single_use(tmp_path):
     auth = make_auth(tmp_path)
     challenge = auth.issue_challenge()
-    assert auth.consume_challenge(challenge["nonce"]) is not None
-    assert auth.consume_challenge(challenge["nonce"]) is None  # already used
+    assert auth.peek_challenge(challenge["nonce"]) is not None
+    auth.delete_challenge(challenge["nonce"])
+    assert auth.peek_challenge(challenge["nonce"]) is None  # consumed after success
 
 
 def test_nep413_signature_verification(tmp_path):
@@ -184,18 +185,76 @@ def test_near_login_rejects_bad_signature(tmp_path):
         )
 
 
+def test_failed_attempt_keeps_challenge_retryable(tmp_path):
+    """The reported bug: any failed attempt burned the single-use nonce, so
+    every retry said 'already used'. Now the challenge is consumed only on
+    success, so a retry with the same nonce verifies."""
+    auth = make_auth(tmp_path)
+    account = "alice.near"
+    signing_key = SigningKey.generate()
+    pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
+
+    challenge = auth.issue_challenge()
+    nonce_b64 = challenge["nonce"]
+
+    orig = auth_mod.near_access_key_exists
+    auth_mod.near_access_key_exists = lambda a, k, rpc_url=None: a == account
+    try:
+        # first attempt fails: wrong signature
+        with pytest.raises(AuthError, match="verification"):
+            auth.verify_near_login(
+                account_id=account,
+                public_key=pubkey_b58,
+                signature=b58(signing_key.sign(b"wrong").signature),
+                nonce=nonce_b64,
+                recipient="app.example",
+            )
+        # the challenge is NOT burned: retry with the correct signature works
+        message = f"Sign in to nexscrow.\nOne-time nonce: {nonce_b64}"
+        raw_nonce = base64.urlsafe_b64decode(nonce_b64 + "=" * (-len(nonce_b64) % 4))
+        payload = (
+            struct.pack("<I", auth_mod.NEP413_TAG)
+            + _borsh_str(message.encode())
+            + raw_nonce
+            + _borsh_str(b"app.example")
+            + b"\x00"
+        )
+        good_sig = b58(
+            signing_key.sign(hashlib.sha256(payload).digest()).signature
+        )
+        user = auth.verify_near_login(
+            account_id=account,
+            public_key=pubkey_b58,
+            signature=good_sig,
+            nonce=nonce_b64,
+            recipient="app.example",
+        )
+        assert user["user_id"] == f"near:{account}"
+        # and now it IS consumed
+        with pytest.raises(AuthError, match="challenge"):
+            auth.verify_near_login(
+                account_id=account,
+                public_key=pubkey_b58,
+                signature=good_sig,
+                nonce=nonce_b64,
+                recipient="app.example",
+            )
+    finally:
+        auth_mod.near_access_key_exists = orig
+
+
 def test_near_login_rejects_replayed_nonce(tmp_path):
     auth = make_auth(tmp_path)
     challenge = auth.issue_challenge()
-    # consume it once
-    auth.consume_challenge(challenge["nonce"])
+    # consume it once (e.g. a previous successful login used it)
+    auth.delete_challenge(challenge["nonce"])
     with pytest.raises(AuthError, match="challenge"):
         auth.verify_near_login(
             account_id="alice.near",
             public_key="ed25519:whatever",
             signature="deadbeef",
             nonce=challenge["nonce"],
-            recipient="app.example",
+        recipient="app.example",
         )
 
 

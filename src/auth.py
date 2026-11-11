@@ -26,7 +26,7 @@ from src.storage import JsonStore, utcnow
 
 
 SESSION_TTL_SECONDS = 24 * 3600
-CHALLENGE_TTL_SECONDS = 10 * 60
+CHALLENGE_TTL_SECONDS = 15 * 60
 NEAR_RPC_URL = "https://rpc.mainnet.near.org"
 NEP413_TAG = 2**31 + 413
 SESSION_COOKIE = "nexscrow_session"
@@ -254,13 +254,9 @@ class AuthService:
         self._store.update("challenges", {}, mutate)
         return {"message": message, "nonce": nonce_b64}
 
-    def consume_challenge(self, nonce_b64: str) -> bytes | None:
-        """Pop the challenge; return raw nonce bytes if it was fresh."""
-
-        def mutate(challenges: dict) -> Any:
-            return challenges.pop(nonce_b64, None)
-
-        entry = self._store.update("challenges", {}, mutate)
+    def peek_challenge(self, nonce_b64: str) -> bytes | None:
+        """Read the challenge nonce without consuming it."""
+        entry = self._store.read("challenges", {}).get(nonce_b64)
         if not entry or entry.get("expires_at", 0) <= time.time():
             return None
         try:
@@ -268,6 +264,15 @@ class AuthService:
             return base64.urlsafe_b64decode(padded)
         except Exception:  # noqa: BLE001
             return None
+
+    def delete_challenge(self, nonce_b64: str) -> None:
+        """Consume the challenge. Called only after successful verification
+        so a failed attempt never burns the nonce."""
+
+        def mutate(challenges: dict) -> None:
+            challenges.pop(nonce_b64, None)
+
+        entry = self._store.update("challenges", {}, mutate)
 
     def verify_near_login(
         self,
@@ -280,9 +285,11 @@ class AuthService:
     ) -> dict:
         if not account_id or not public_key or not signature:
             raise AuthError("account_id, public_key and signature are required")
-        raw_nonce = self.consume_challenge(nonce)
+        raw_nonce = self.peek_challenge(nonce)
         if raw_nonce is None:
-            raise AuthError("challenge expired or already used; retry the login")
+            raise AuthError(
+                "login challenge expired — click Connect Wallet again to retry"
+            )
         message = f"Sign in to nexscrow.\nOne-time nonce: {nonce}"
         if not verify_near_signature(
             message, raw_nonce, recipient, callback_url, public_key, signature
@@ -290,6 +297,8 @@ class AuthService:
             raise AuthError("wallet signature failed verification")
         if not near_access_key_exists(account_id, public_key):
             raise AuthError(f"public key is not an access key of account '{account_id}'")
+        # consumed only on success: a failed attempt stays retryable
+        self.delete_challenge(nonce)
         return {
             "provider": "near",
             "user_id": f"near:{account_id}",

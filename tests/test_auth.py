@@ -99,6 +99,59 @@ def test_nep413_signature_verification(tmp_path):
     assert user["name"] == account
 
 
+def test_nep413_signature_verification_wallet_format(tmp_path):
+    """Real wallet conditions: 'ed25519:'-prefixed key, Borsh None-option
+    payload (callbackUrl absent), base64 signature from injected wallets."""
+    auth = make_auth(tmp_path)
+    account = "yurrri.near"
+    signing_key = SigningKey.generate()
+    pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
+
+    challenge = auth.issue_challenge()
+    nonce_b64 = challenge["nonce"]
+    raw_nonce = base64.urlsafe_b64decode(nonce_b64 + "=" * (-len(nonce_b64) % 4))
+
+    # exact NEP-413 layout an injected wallet signs with no callbackUrl:
+    # borsh(u32 tag) || borsh(message) || nonce || borsh(recipient) || 0x00
+    payload = (
+        struct.pack("<I", auth_mod.NEP413_TAG)
+        + _borsh_str(challenge["message"].encode())
+        + raw_nonce
+        + _borsh_str(b"nexscrow.vercel.app")
+        + b"\x00"
+    )
+    digest = hashlib.sha256(payload).digest()
+    sig_bytes = signing_key.sign(digest).signature
+    sig_b64 = base64.b64encode(sig_bytes).decode()
+
+    orig = auth_mod.near_access_key_exists
+    auth_mod.near_access_key_exists = lambda a, k, rpc_url=None: a == account
+    try:
+        user = auth.verify_near_login(
+            account_id=account,
+            public_key=pubkey_b58,
+            signature=sig_b64,
+            nonce=nonce_b64,
+            recipient="nexscrow.vercel.app",
+            callback_url=None,
+        )
+    finally:
+        auth_mod.near_access_key_exists = orig
+    assert user["user_id"] == f"near:{account}"
+
+
+def test_decode_strips_scheme_prefix():
+    from src.auth import _decode_key_or_sig, _b58_decode
+
+    key = SigningKey.generate().verify_key
+    encoded = b58(bytes(key))
+    # scheme prefix must not break decoding
+    assert _decode_key_or_sig(f"ed25519:{encoded}") == _b58_decode(encoded)
+    # garbage still fails cleanly
+    with pytest.raises(AuthError):
+        _decode_key_or_sig("!!!not-a-key!!!")
+
+
 def test_near_login_rejects_bad_signature(tmp_path):
     auth = make_auth(tmp_path)
     challenge = auth.issue_challenge()

@@ -49,15 +49,23 @@ def _b58_decode(value: str) -> bytes:
 
 def _decode_key_or_sig(value: str) -> bytes:
     """Wallets return base58 (web flow) or base64 (some injected wallets)."""
+    # Wallets prefix NEAR public keys with their scheme, e.g. "ed25519:...".
+    value = value.strip()
+    scheme, sep, rest = value.partition(":")
+    if sep and scheme in ("ed25519", "secp256k1") and rest:
+        value = rest
     try:
         return _b58_decode(value)
     except (AuthError, ValueError):
         pass
-    try:
-        padded = value + "=" * (-len(value) % 4)
-        return base64.urlsafe_b64decode(padded)
-    except Exception as exc:  # noqa: BLE001
-        raise AuthError("unrecognized signature/public key encoding") from exc
+    # base64 (standard or url-safe), possibly unpadded; strict validation so a
+    # wrong encoding fails cleanly instead of producing garbage bytes.
+    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+        try:
+            return decoder(value + "=" * (-len(value) % 4), validate=True)
+        except Exception:
+            continue
+    raise AuthError("unrecognized signature/public key encoding")
 
 
 def _borsh_str(data: bytes) -> bytes:
@@ -69,19 +77,28 @@ def nep413_payloads(
 ) -> list[bytes]:
     """Byte layouts a wallet may have signed for one NEP-413 request.
 
-    NEP-413: sign SHA256(borsh(u32 tag) || payload). Wallets differ slightly
-    in how the optional callbackUrl is encoded, and older MyNearWallet signed
-    the raw message; verification tries each variant.
+    NEP-413: sign SHA256(borsh(u32 tag) || payload). callbackUrl is a Borsh
+    Option: None = trailing 0x00, Some = 0x01 + borsh string. Some wallets
+    omit the option byte entirely, and older MyNearWallet signed the raw
+    message; verification tries each variant.
     """
     m = message.encode("utf-8")
     r = recipient.encode("utf-8")
     tag = struct.pack("<I", NEP413_TAG)
     base = _borsh_str(m) + nonce + _borsh_str(r)
-    candidates = [tag + base]
     if callback_url:
         cb = callback_url.encode("utf-8")
-        candidates.insert(0, tag + base + b"\x01" + _borsh_str(cb))
-        candidates.insert(1, tag + base + _borsh_str(cb))
+        candidates = [
+            tag + base + b"\x01" + _borsh_str(cb),  # Borsh Option Some
+            tag + base + _borsh_str(cb),            # option byte omitted
+            tag + base + b"\x00",                   # Option None
+            tag + base,
+        ]
+    else:
+        candidates = [
+            tag + base + b"\x00",  # Borsh Option None (the spec layout)
+            tag + base,            # option byte omitted
+        ]
     candidates.append(m)
     candidates.append(hashlib.sha256(m).digest())
     return candidates

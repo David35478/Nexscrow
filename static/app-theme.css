@@ -200,3 +200,22 @@ body.app-surface .workspace-heading>.btn,body.app-surface .billing-heading>.btn,
 body.app-surface .metric-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:800px){body.app-surface .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:500px){body.app-surface .customer-heading,body.app-surface .workspace-heading,body.app-surface .billing-heading{align-items:flex-start;flex-direction:column}body.app-surface .metric-grid{grid-template-columns:1fr 1fr}}
+
+/* Original uploaded template: translucent nav and thin-bordered glass surfaces. */
+body.app-surface{--app-white:rgba(255,255,255,.56);--app-line:rgba(0,0,0,.06);--app-ink:#171717;--app-muted:rgba(0,0,0,.45);--app-moss:#171717;--app-moss-dark:#171717;--app-soft:rgba(0,0,0,.03);font-family:var(--template-sans,'IBM Plex Sans'),system-ui,sans-serif}
+body.app-surface .site-header,body.app-surface .nav{max-width:768px;width:calc(100% - 32px);margin:16px auto 40px;border-radius:16px;border:1px solid rgba(0,0,0,.06);background:rgba(245,244,240,.30);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 8px 32px rgba(0,0,0,.08),0 2px 8px rgba(0,0,0,.06)}
+body.app-surface .nav-inner{min-height:62px;padding:0 20px;gap:16px;width:100%}
+body.app-surface .brand{font-family:'Courier Prime',monospace;text-transform:uppercase;letter-spacing:.25em;font-size:12px;font-weight:400}
+body.app-surface .brand-dot{display:none}
+body.app-surface .main-nav{margin-left:auto;gap:12px}
+body.app-surface .main-nav a,body.app-surface .nav-right a{font-size:11px;font-weight:400;letter-spacing:.02em}
+body.app-surface .main-nav a.active,body.app-surface .nav .nav-on{color:#171717;background:rgba(0,0,0,.04);border-color:rgba(0,0,0,.08)}
+body.app-surface .discovery-card,body.app-surface .agent-card,body.app-surface .workspace-card,body.app-surface .dashboard-card,body.app-surface .portal-card,body.app-surface .plan-card,body.app-surface .subscription-card,body.app-surface .detail-section,body.app-surface .agent-profile,body.app-surface .purchase-panel{background:rgba(255,255,255,.52);border:1px solid rgba(0,0,0,.06);border-radius:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 2px 10px rgba(0,0,0,.025)}
+body.app-surface h1{font-weight:300;letter-spacing:-.06em}body.app-surface h2{font-weight:400;letter-spacing:-.045em}
+body.app-surface .btn-primary,body.app-surface .btn-dark,body.app-surface .btn.primary{background:#171717;border-color:#171717;color:#fff}
+body.app-surface .hero-search{background:rgba(255,255,255,.4);backdrop-filter:blur(16px);border:1px solid rgba(0,0,0,.08);box-shadow:0 8px 32px rgba(0,0,0,.03)}
+body.app-surface .agent-monogram,body.app-surface .payment-icon{background:rgba(0,0,0,.03);color:rgba(0,0,0,.65);border-color:rgba(0,0,0,.06)}
+body.app-surface .section-kicker,body.app-surface .hero-eyebrow,body.app-surface .eyebrow{color:rgba(0,0,0,.35)}
+@media(max-width:650px){body.app-surface .site-header,body.app-surface .nav{margin-bottom:24px}body.app-surface .nav-inner{padding:12px 16px}body.app-surface .main-nav{margin:0;justify-content:flex-start;gap:6px}body.app-surface .brand{font-size:11px}body.app-surface .nav-actions{margin-left:auto;width:auto}}
+body.app-surface .marketplace-cta,body.app-surface .balance-card{background:rgba(17,17,17,.92);border-color:rgba(0,0,0,.06);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08)}
+body.app-surface .marketplace-cta .section-kicker{color:rgba(255,255,255,.5)}

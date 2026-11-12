@@ -203,6 +203,10 @@ class AuthService:
             }
 
         self._store.update("sessions", {}, mutate)
+        def remember(users):
+            previous = users.get(user_id, {})
+            users[user_id] = {'user_id': user_id, 'provider': provider, 'created_at': previous.get('created_at', utcnow()), 'last_login_at': utcnow()}
+        self._store.update('user_directory', {}, remember)
         return token
 
     def get_user(self, token: str | None) -> dict | None:
@@ -270,9 +274,10 @@ class AuthService:
         so a failed attempt never burns the nonce."""
 
         def mutate(challenges: dict) -> None:
-            challenges.pop(nonce_b64, None)
-
-        entry = self._store.update("challenges", {}, mutate)
+            entry = challenges.pop(nonce_b64, None)
+            if not entry or entry.get('expires_at', 0) <= time.time():
+                raise AuthError('nonce expired, used, or invalid; please request a new challenge')
+        self._store.update("challenges", {}, mutate)
 
     def verify_near_login(
         self,

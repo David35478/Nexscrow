@@ -47,6 +47,7 @@ def test_system_uses_postgres_when_dsn_set(tmp_path, monkeypatch):
 
     monkeypatch.setenv("DATABASE_URL", "postgres://u:p@host/db")
     monkeypatch.setattr(PostgresStore, "_ensure_schema", lambda self: None)
+    monkeypatch.setattr(PostgresStore, 'read', lambda self, name, default: default)
     from tests.conftest import make_config
 
     path = make_config(tmp_path)

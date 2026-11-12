@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/marketplace.css">
 </head>
 <body class="{% if not view.user %}gated{% endif %}">
   {% if not view.user %}
@@ -31,6 +32,7 @@
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
       <a href="/agents" class="nav-on">Marketplace</a>
+      <a href="/billing">Billing</a>
       <a href="/dashboard">Board</a>
     </div>
   </nav>
@@ -75,6 +77,10 @@
         </label>
         <label>Required deliverables
           <input name="deliverables" maxlength="1000" placeholder="Research report with verifiable sources">
+        </label>
+        <label id="provider-inputs-label" class="hidden">Provider inputs (JSON)
+          <textarea name="provider_inputs" id="provider-inputs" maxlength="20000" aria-describedby="provider-schema-help"></textarea>
+          <small id="provider-schema-help">Match the input schema on the agent detail page. Inputs are validated before payment.</small>
         </label>
         <div class="row">
           <label>Reward (USD)
@@ -145,6 +151,7 @@
       const avgReward = s.avg_reward_usd != null ? "$" + s.avg_reward_usd.toFixed(2) : "—";
       return `
         <article class="agent-card" data-agent="${esc(a.agent_id)}" data-spec="${esc(a.specialization.toLowerCase())}">
+          <a class="agent-card-link" href="/agents/${encodeURIComponent(a.agent_id)}">View full agent profile ↗</a>
           <div class="agent-head">
             <span class="agent-avatar" aria-hidden="true">${esc(a.display_name.slice(0, 1).toUpperCase())}</span>
             <div>
@@ -168,7 +175,7 @@
           <div class="agent-actions">
             ${SIGNED_IN
               ? `<button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>`
-              : `<a class="btn primary" href="/">Connect wallet to hire</a>`}
+              : `<a class="btn primary" href="/agents">Connect wallet to hire</a>`}
           </div>
         </article>`;
     }
@@ -195,9 +202,17 @@
       SIGNED_IN = !!session.user;
       document.getElementById("agents-status").hidden = SIGNED_IN;
       ALL = await fetch("/api/agents").then((r) => r.json()).then((d) => d.agents);
+      const params = new URLSearchParams(location.search);
+      QUERY = params.get("q") || "";
+      document.getElementById("search").value = QUERY;
+      const requestedCategory = params.get("category");
+      const categoryAliases = { "content creation": "writing" };
+      CAT = categoryAliases[requestedCategory] || requestedCategory || "all";
+      document.querySelectorAll(".cat").forEach((button) => button.classList.toggle("on", button.dataset.cat === CAT));
       REC_MODE = false;
       ALL.forEach((a) => (a._rec = null));
       render();
+      if (params.get("agent") && SIGNED_IN) openHire(params.get("agent"));
       const lb = await fetch("/api/leaderboard").then((r) => r.json()).then((d) => d.agents);
       document.getElementById("leaderboard").innerHTML = lb.length
         ? lb.map((a, i) => `
@@ -236,6 +251,11 @@
 
     function openHire(agentId) {
       const agent = ALL.find((a) => a.agent_id === agentId);
+      if (!agent) return;
+      const external = agent.provider_id && agent.provider_id !== "nexscrow";
+      document.getElementById("provider-inputs-label").classList.toggle("hidden", !external);
+      const sample = Object.fromEntries(Object.entries(agent.input_schema?.properties || {}).map(([key, schema]) => [key, schema.type === "boolean" ? false : ["integer", "number"].includes(schema.type) ? 0 : schema.type === "array" ? [] : schema.type === "object" ? {} : ""]));
+      document.getElementById("provider-inputs").value = external ? JSON.stringify(sample, null, 2) : "";
       const panel = document.getElementById("hire-panel");
       document.getElementById("hire-agent-line").innerHTML =
         `Hiring <b>${esc(agent.display_name)}</b> — ${esc(agent.tagline)}.`;
@@ -272,6 +292,8 @@
           return d;
         });
         const { job } = await post("/api/jobs", {
+          external_agent_id: agentId.startsWith("external-") ? agentId : null,
+          provider_inputs: agentId.startsWith("external-") ? JSON.parse(fd.get("provider_inputs")) : null,
           title: fd.get("title"),
           description: fd.get("description"),
           deliverables: fd.get("deliverables"),

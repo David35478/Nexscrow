@@ -107,6 +107,8 @@ class JobStore:
             if job_id not in jobs:
                 raise JobNotFound(job_id)
             for other_id, other in jobs.items():
+                if jobs[job_id]['payment_status'] != 'pending':
+                    raise DepositReplayError('Job deposit was already claimed')
                 if other_id != job_id and other.get("deposit_tx_hash") == tx_hash:
                     raise DepositReplayError(
                         "this transaction already funded another job"

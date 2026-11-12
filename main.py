@@ -27,6 +27,7 @@ from src.providers.base import ProviderError
 from src.providers.execution import ProviderPending
 from src.requests import RequestService, RequestError
 from src.credits import CreditError
+from fastapi.responses import FileResponse
 from src.billing import BillingService, BillingError
 from src.intents import IntentsError
 from src.customer import CustomerService
@@ -230,6 +231,8 @@ def create_app(
 
     templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+    app.mount('/landing-assets', StaticFiles(directory=str(BASE_DIR / 'static' / 'landing-export'), check_dir=False), name='landing_assets')
+    app.mount('/images', StaticFiles(directory=str(BASE_DIR / 'frontend' / 'public' / 'images')), name='template_images')
 
     def _handler(status_code: int):
         def inner(request: Request, exc: Exception) -> JSONResponse:
@@ -428,13 +431,7 @@ def create_app(
 
     @app.get("/")
     async def index(request: Request):
-        view = system.public_view()
-        view["user"] = current_user(request)
-        return templates.TemplateResponse(
-            request=request,
-            name="landing.html",
-            context={"user": current_user(request)},
-        )
+        return FileResponse(BASE_DIR / 'static' / 'landing-export' / 'index.html', media_type='text/html')
 
     @app.get('/login')
     async def login_portal(request: Request):

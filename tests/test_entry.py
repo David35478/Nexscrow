@@ -8,7 +8,7 @@ def test_public_landing_login_and_authenticated_app(tmp_path):
     landing=c.get('/')
     assert landing.status_code==200
     assert '/login' in landing.text
-    assert '/static/landing.js' in landing.text
+    assert '/landing-assets/_next/' in landing.text
     portal=c.get('/login')
     assert all(value in portal.text for value in ['portal-wallet','portal-google','portal-demo'])
     for path in ['/app','/agents','/dashboard','/workspace','/billing','/account','/requests','/agents/agent-oracle-1','/job/example']:

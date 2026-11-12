@@ -5,3 +5,7 @@ __pycache__/
 data/
 .env
 .pr-body.md
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/next-env.d.ts

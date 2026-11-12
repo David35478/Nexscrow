@@ -209,6 +209,13 @@ def create_app(
     app = FastAPI(title="nexscrow", version="1.0.0", docs_url="/api/docs")
     system = NexscrowSystem(config_path, data_dir)
     app.state.system = system
+    @app.middleware('http')
+    async def app_entry_portal(request: Request, call_next):
+        private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer'}
+        is_app_page = request.method == 'GET' and (request.url.path in private_pages or request.url.path.startswith(('/agents/', '/job/')))
+        if is_app_page and not app.state.auth.get_user(request.cookies.get(SESSION_COOKIE)):
+            return RedirectResponse('/login', status_code=303)
+        return await call_next(request)
     from src.security import install_security
     install_security(app, system.store)
     auth = AuthService(system.store)
@@ -425,9 +432,21 @@ def create_app(
         view["user"] = current_user(request)
         return templates.TemplateResponse(
             request=request,
-            name="marketplace_home.html",
-            context={**marketplace_view(system), "user": current_user(request)},
+            name="landing.html",
+            context={"user": current_user(request)},
         )
+
+    @app.get('/login')
+    async def login_portal(request: Request):
+        if current_user(request):
+            return RedirectResponse('/app', status_code=303)
+        return templates.TemplateResponse(request=request, name='login.html', context={})
+
+    @app.get('/app')
+    async def app_home(request: Request):
+        if not current_user(request):
+            return RedirectResponse('/login', status_code=303)
+        return templates.TemplateResponse(request=request, name='marketplace_home.html', context={**marketplace_view(system), 'user': current_user(request)})
 
     @app.get("/agents/{agent_id}")
     async def agent_detail(request: Request, agent_id: str):
@@ -538,6 +557,8 @@ def create_app(
 
     @app.get("/agents")
     async def agents_page(request: Request):
+        if not current_user(request):
+            return RedirectResponse('/login', status_code=303)
         view = system.public_view()
         view["user"] = current_user(request)
         return templates.TemplateResponse(
@@ -607,7 +628,7 @@ def create_app(
         redirect_uri = f"{_external_base(request)}/api/auth/google/callback"
         user = auth.verify_google_code(code, redirect_uri)
         token = auth.create_session(user["provider"], user["user_id"], user["name"])
-        response = RedirectResponse("/", status_code=302)
+        response = RedirectResponse("/app", status_code=302)
         response.delete_cookie('nexscrow_oauth_state')
         response.set_cookie(
             SESSION_COOKIE, token, httponly=True, secure=os.environ.get("APP_ENV") == "production", samesite="lax", max_age=24 * 3600

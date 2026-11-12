@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
+<link rel="stylesheet" href="/static/app-theme.css"></head>
+<body class="app-surface">
   <div class="wrap hero">
     <h1 style="font-size:28px; font-family:var(--font-display,serif)">Completing wallet action…</h1>
     <div id="callback-status" class="result">Verifying your wallet.</div>
@@ -72,7 +72,7 @@
           callback_url: callbackUrl,
         });
         status.textContent = `✓ Signed in as ${data.user.name}. Redirecting…`;
-        setTimeout(() => (location.href = "/dashboard"), 1200);
+        setTimeout(() => (location.href = "/app"), 1200);
       } catch (err) {
         if (/expired|challenge/i.test(err.message)) {
           // burned nonce: the home page's restore auto-completes the login

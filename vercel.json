@@ -3,6 +3,7 @@
   "functions": {
     "main.py": {
       "maxDuration": 60,
+      "includeFiles": "{config.yaml,templates/**,static/**,src/**}",
       "excludeFiles": "{tests/**,.venv/**,data/**}"
     }
   }

@@ -62,7 +62,7 @@ def install_security(app, store):
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response.headers['X-Frame-Options'] = 'DENY'
         response.headers['Content-Security-Policy'] = "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self' https:"
-        if request.url.path.startswith('/api/') or request.url.path in {'/account', '/admin', '/developer', '/workspace', '/requests', '/billing'}:
+        if request.url.path.startswith('/api/') or request.url.path in {'/app', '/login', '/account', '/admin', '/developer', '/workspace', '/requests', '/billing'}:
             response.headers['Cache-Control'] = 'no-store'
         if os.environ.get('APP_ENV') == 'production':
             response.headers['Strict-Transport-Security'] = 'max-age=31536000'

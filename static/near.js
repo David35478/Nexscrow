@@ -23,6 +23,7 @@ function b64urlToBytes(value) {
 function showErr(err) {
   const box = document.getElementById("auth-error");
   if (!box) return;
+  box.hidden = false;
   box.classList.remove("hidden");
   box.classList.add("error");
   box.textContent = `✗ ${err.message || err}`;
@@ -115,7 +116,7 @@ async function signAndVerify(wallet, accountId, attempt) {
     throw new Error(msg);
   }
   // wallet connected -> open the dashboard
-  location.href = "/dashboard";
+  location.href = "/app";
 }
 
 async function connectedWalletOrNull() {
@@ -187,7 +188,7 @@ async function restoreSession() {
 /* ------------------------------------------ NEAR Auth (Google login) */
 
 async function nearAuthLogin() {
-  const btn = document.getElementById("fastauth-btn");
+  const btn = document.getElementById("fastauth-btn") || document.getElementById('portal-google');
   try {
     btn.disabled = true;
     btn.textContent = "Opening Google…";
@@ -227,7 +228,7 @@ async function nearAuthLogin() {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || data.detail || res.statusText);
-    location.href = "/";
+    location.href = "/app";
   } catch (err) {
     showErr(err);
   } finally {

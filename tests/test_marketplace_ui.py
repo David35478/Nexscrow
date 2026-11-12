@@ -4,7 +4,8 @@ from main import create_app
 
 def test_discovery_and_agent_pages(tmp_path):
     client = TestClient(create_app(config_path="config.yaml", data_dir=tmp_path))
-    home = client.get("/")
+    client.post("/api/auth/demo")
+    home = client.get("/app")
     assert home.status_code == 200
     assert "Featured agents" in home.text
     assert "Popular agents" in home.text
@@ -19,6 +20,7 @@ def test_discovery_and_agent_pages(tmp_path):
 
 def test_billing_identifies_unavailable_services(tmp_path):
     client = TestClient(create_app(config_path="config.yaml", data_dir=tmp_path))
+    client.post("/api/auth/demo")
     response = client.get("/billing")
     assert response.status_code == 200
     assert "Credits and escrow are separate" in response.text

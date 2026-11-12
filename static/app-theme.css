@@ -1,0 +1,202 @@
+/* Shared in-app theme; deliberately scoped so the public landing page is unchanged. */
+body.app-surface {
+  --app-paper: #f5f4f0;
+  --app-white: #fffefa;
+  --app-ink: #171815;
+  --app-muted: #77786f;
+  --app-line: #e3e1d9;
+  --app-moss: #53684d;
+  --app-moss-dark: #344a35;
+  --app-soft: #eeede7;
+  margin: 0;
+  background: var(--app-paper);
+  color: var(--app-ink);
+  font-family: "IBM Plex Sans", "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+body.app-surface *,
+body.app-surface *::before,
+body.app-surface *::after { box-sizing: border-box; }
+body.app-surface [hidden], body.app-surface .hidden { display: none !important; }
+body.app-surface a { color: inherit; text-decoration: none; }
+body.app-surface button, body.app-surface input, body.app-surface select, body.app-surface textarea { font: inherit; }
+body.app-surface button, body.app-surface a, body.app-surface input, body.app-surface select, body.app-surface textarea { -webkit-tap-highlight-color: transparent; }
+body.app-surface :focus-visible { outline: 2px solid var(--app-moss); outline-offset: 3px; }
+body.app-surface ::selection { color: var(--app-ink); background: #d9e0d1; }
+
+body.app-surface .container,
+body.app-surface .wrap { width: min(1180px, calc(100% - 48px)); margin-inline: auto; }
+body.app-surface .nav,
+body.app-surface .site-header {
+  position: sticky; z-index: 20; top: 12px; width: min(1180px, calc(100% - 40px));
+  margin: 12px auto 34px; border: 1px solid rgb(227 225 217 / 86%); border-radius: 999px;
+  background: rgb(255 254 250 / 92%); box-shadow: 0 8px 30px rgb(23 24 21 / 4%); backdrop-filter: blur(14px);
+}
+body.app-surface .nav { min-height: 58px; padding: 9px 18px; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+body.app-surface .nav-right,
+body.app-surface .main-nav,
+body.app-surface .nav-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+body.app-surface .brand { display: inline-flex; align-items: center; gap: 9px; color: var(--app-ink); font-size: 15px; font-weight: 650; letter-spacing: -.04em; white-space: nowrap; }
+body.app-surface .brand-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--app-moss); box-shadow: 0 0 0 4px #53684d1a; }
+body.app-surface .nav a:not(.brand),
+body.app-surface .main-nav a,
+body.app-surface .user-pill,
+body.app-surface .secure-pill,
+body.app-surface .chip,
+body.app-surface .tag-pill,
+body.app-surface .gate-tag,
+body.app-surface .status-pill,
+body.app-surface .status-badge,
+body.app-surface .verified-badge,
+body.app-surface .verified-mark {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--app-line); border-radius: 999px;
+  padding: 7px 12px; background: var(--app-white); color: var(--app-muted); font-size: 11px;
+  font-family: "Courier Prime", "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .025em;
+}
+body.app-surface .nav a:hover, body.app-surface .main-nav a:hover { color: var(--app-ink); background: var(--app-soft); }
+body.app-surface .nav .nav-on, body.app-surface .main-nav a.active { color: var(--app-white); background: var(--app-ink); border-color: var(--app-ink); }
+
+body.app-surface h1, body.app-surface h2, body.app-surface h3,
+body.app-surface .page-title, body.app-surface .workspace-heading,
+body.app-surface .billing-heading, body.app-surface .customer-heading,
+body.app-surface .management-heading {
+  color: var(--app-ink); font-weight: 500; letter-spacing: -.055em; line-height: 1.08;
+}
+body.app-surface h1, body.app-surface .page-title { font-size: clamp(34px, 5vw, 60px); }
+body.app-surface h2 { font-size: clamp(24px, 3vw, 36px); }
+body.app-surface .section-heading { line-height: 1.4; }
+body.app-surface .section-heading h2, body.app-surface .section-heading h3 { margin: 0 0 9px; line-height: 1.12; }
+body.app-surface .section-heading p { margin: 0; line-height: 1.6; }
+body.app-surface h3 { font-size: 19px; }
+body.app-surface p, body.app-surface .lede, body.app-surface .sub, body.app-surface .agent-description { color: var(--app-muted); }
+body.app-surface .eyebrow, body.app-surface .kicker, body.app-surface .section-kicker,
+body.app-surface .hero-eyebrow, body.app-surface .gate-tag, body.app-surface .mono {
+  color: var(--app-moss); font: 11px/1.4 "Courier Prime", "IBM Plex Mono", ui-monospace, monospace;
+  letter-spacing: .08em; text-transform: uppercase;
+}
+body.app-surface .page-title, body.app-surface .workspace-heading, body.app-surface .billing-heading,
+body.app-surface .customer-heading, body.app-surface .management-heading { margin: 0 0 14px; }
+
+body.app-surface .btn, body.app-surface button.btn, body.app-surface .portal-button,
+body.app-surface .workspace-submit, body.app-surface input[type="submit"] {
+  min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 17px; border: 1px solid var(--app-ink); border-radius: 999px;
+  background: var(--app-ink); color: white; font-weight: 550; font-size: 13px;
+  cursor: pointer; transition: background .18s ease, border-color .18s ease, transform .18s ease;
+}
+body.app-surface .btn-primary { color: #fff; }
+body.app-surface .btn:hover, body.app-surface .portal-button:hover,
+body.app-surface .workspace-submit:hover, body.app-surface input[type="submit"]:hover { background: var(--app-moss-dark); border-color: var(--app-moss-dark); transform: translateY(-1px); }
+body.app-surface .btn-secondary, body.app-surface .btn-light, body.app-surface .btn-ghost,
+body.app-surface .ghost, body.app-surface .text-button {
+  border: 1px solid var(--app-line); background: var(--app-white); color: var(--app-ink);
+}
+body.app-surface .btn-secondary:hover, body.app-surface .btn-light:hover,
+body.app-surface .btn-ghost:hover, body.app-surface .ghost:hover { background: var(--app-soft); border-color: #ceccc2; }
+body.app-surface .btn-sm { min-height: 34px; padding: 7px 12px; font-size: 12px; }
+body.app-surface .btn-block { width: 100%; }
+body.app-surface button:disabled, body.app-surface .btn:disabled { opacity: .48; cursor: not-allowed; transform: none; }
+
+body.app-surface .panel, body.app-surface .agent-card, body.app-surface .discovery-card,
+body.app-surface .dashboard-card, body.app-surface .metric-card, body.app-surface .workspace-card,
+body.app-surface .purchase-panel, body.app-surface .balance-card, body.app-surface .subscription-card,
+body.app-surface .portal-card, body.app-surface .gate-card, body.app-surface .bento,
+body.app-surface .detail-section, body.app-surface .empty-plan, body.app-surface .billing-notice,
+body.app-surface .dashboard-notice, body.app-surface .workspace-alert {
+  border: 1px solid var(--app-line); border-radius: 22px; background: var(--app-white);
+  box-shadow: 0 2px 10px rgb(23 24 21 / 2%);
+}
+body.app-surface .panel, body.app-surface .dashboard-card, body.app-surface .workspace-card,
+body.app-surface .purchase-panel, body.app-surface .portal-card, body.app-surface .gate-card,
+body.app-surface .detail-section { padding: clamp(18px, 3vw, 28px); }
+body.app-surface .agent-card, body.app-surface .discovery-card { padding: 20px; transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; }
+body.app-surface .agent-card:hover, body.app-surface .discovery-card:hover { transform: translateY(-3px); border-color: #cfcdc3; box-shadow: 0 12px 32px rgb(23 24 21 / 7%); }
+body.app-surface .agent-grid, body.app-surface .discovery-grid, body.app-surface .plans-grid,
+body.app-surface .metric-grid, body.app-surface .capability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+body.app-surface .bento-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+body.app-surface .bento { overflow: hidden; grid-column: span 4; }
+body.app-surface .bento-2col { grid-column: span 6; }
+body.app-surface .bento-4, body.app-surface .span-4 { grid-column: span 4; }
+body.app-surface .span-12 { grid-column: span 12; }
+body.app-surface .agent-avatar, body.app-surface .agent-monogram { border-radius: 15px; background: #e8e9df; color: var(--app-moss-dark); }
+body.app-surface .agent-actions, body.app-surface .agent-stats, body.app-surface .agent-caps,
+body.app-surface .chips, body.app-surface .cat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+body.app-surface .agent-tagline, body.app-surface .agent-policy, body.app-surface .agent-provider,
+body.app-surface .agent-category, body.app-surface .chip, body.app-surface .agent-caps > * { color: var(--app-muted); }
+
+body.app-surface input:not([type="checkbox"]):not([type="radio"]),
+body.app-surface select, body.app-surface textarea {
+  width: 100%; min-height: 44px; padding: 11px 13px; border: 1px solid #dcdad1; border-radius: 12px;
+  background: #fffefa; color: var(--app-ink); outline: none; transition: border-color .15s ease, box-shadow .15s ease;
+}
+body.app-surface textarea { min-height: 110px; resize: vertical; }
+body.app-surface input:focus, body.app-surface select:focus, body.app-surface textarea:focus { border-color: var(--app-moss); box-shadow: 0 0 0 3px #53684d1b; }
+body.app-surface label { color: #45463f; font-size: 13px; font-weight: 500; }
+body.app-surface .payment-option, body.app-surface .payment-choice, body.app-surface .credits-option {
+  border: 1px solid var(--app-line); border-radius: 15px; background: var(--app-white); padding: 15px;
+}
+body.app-surface .payment-option:has(input:checked), body.app-surface .payment-choice:has(input:checked), body.app-surface .credits-option:has(input:checked) { border-color: var(--app-moss); box-shadow: inset 0 0 0 1px var(--app-moss); }
+body.app-surface .gate { position: fixed; z-index: 50; inset: 0; display: grid; place-items: center; padding: 24px; background: rgb(23 24 21 / 28%); backdrop-filter: blur(8px); }
+body.app-surface .gate-card { width: min(460px, 100%); box-shadow: 0 24px 80px rgb(23 24 21 / 16%); }
+body.app-surface .gate-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+body.app-surface .table-wrap, body.app-surface .history-table-wrap { max-width: 100%; overflow-x: auto; border: 1px solid var(--app-line); border-radius: 16px; background: var(--app-white); }
+body.app-surface table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+body.app-surface th { color: var(--app-muted); font: 10px "Courier Prime", ui-monospace, monospace; text-transform: uppercase; letter-spacing: .06em; }
+body.app-surface th, body.app-surface td { padding: 13px 15px; border-bottom: 1px solid var(--app-line); white-space: nowrap; }
+body.app-surface tr:last-child td { border-bottom: 0; }
+body.app-surface .status-badge, body.app-surface .status-pill { background: #f1f1eb; color: var(--app-moss-dark); }
+body.app-surface .danger, body.app-surface .error { color: #9d493b; }
+body.app-surface .marketplace-cta { color: #fff; }
+body.app-surface .marketplace-cta h1, body.app-surface .marketplace-cta h2,
+body.app-surface .marketplace-cta h3, body.app-surface .marketplace-cta p { color: #fff; }
+body.app-surface .marketplace-cta .btn, body.app-surface .marketplace-cta a.btn { background: #fff; border-color: #fff; color: var(--app-ink); }
+body.app-surface .result, body.app-surface .toast, body.app-surface .form-feedback { border-radius: 12px; }
+body.app-surface .marketplace-footer, body.app-surface .footer { margin-top: 64px; padding: 24px 0; border-top: 1px solid var(--app-line); color: var(--app-muted); font-size: 12px; }
+
+body.app-surface .customer-dashboard, body.app-surface .management, body.app-surface .billing-page,
+body.app-surface .request-workspace, body.app-surface .agent-detail-page { padding-bottom: 64px; }
+body.app-surface .dashboard-columns, body.app-surface .workspace-grid, body.app-surface .agent-detail-layout,
+body.app-surface .cols { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 18px; align-items: start; }
+body.app-surface .dashboard-tabs, body.app-surface .portal-tabs, body.app-surface .history-tabs,
+body.app-surface .workspace-subnav { display: flex; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid var(--app-line); }
+body.app-surface .dashboard-tabs > *, body.app-surface .portal-tabs > *, body.app-surface .history-tabs > *, body.app-surface .workspace-subnav > * { border-radius: 999px; }
+body.app-surface .metric-card { padding: 18px; }
+body.app-surface .metric-card strong, body.app-surface .metric-card .value { display: block; color: var(--app-ink); font-size: clamp(24px, 3vw, 36px); letter-spacing: -.06em; }
+
+@media (max-width: 850px) {
+  body.app-surface .agent-grid, body.app-surface .discovery-grid, body.app-surface .plans-grid,
+  body.app-surface .metric-grid, body.app-surface .capability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  body.app-surface .dashboard-columns, body.app-surface .workspace-grid, body.app-surface .agent-detail-layout,
+  body.app-surface .cols { grid-template-columns: minmax(0, 1fr); }
+  body.app-surface .bento { grid-column: span 6; }
+  body.app-surface .bento-4, body.app-surface .span-4 { grid-column: span 6; }
+}
+@media (max-width: 600px) {
+  body.app-surface .container, body.app-surface .wrap { width: min(100% - 28px, 1180px); }
+  body.app-surface .nav, body.app-surface .site-header { position: relative; top: auto; width: calc(100% - 20px); margin: 10px auto 24px; border-radius: 22px; }
+  body.app-surface .nav { align-items: flex-start; flex-direction: column; padding: 13px; }
+  body.app-surface .nav-right, body.app-surface .main-nav, body.app-surface .nav-actions { width: 100%; justify-content: flex-start; }
+  body.app-surface .nav a:not(.brand), body.app-surface .main-nav a { padding: 7px 10px; font-size: 10px; }
+  body.app-surface .agent-grid, body.app-surface .discovery-grid, body.app-surface .plans-grid,
+  body.app-surface .metric-grid, body.app-surface .capability-grid { grid-template-columns: minmax(0, 1fr); }
+  body.app-surface .bento, body.app-surface .bento-2col, body.app-surface .bento-4,
+  body.app-surface .span-4, body.app-surface .span-12 { grid-column: 1 / -1; }
+  body.app-surface .gate { padding: 14px; }
+  body.app-surface .gate-actions > * { flex: 1 1 100%; }
+  body.app-surface .section-heading h2 { font-size: 27px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.app-surface *, body.app-surface *::before, body.app-surface *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* Heading containers keep body metrics; only the heading itself is display-sized. */
+body.app-surface .workspace-heading,body.app-surface .billing-heading,body.app-surface .customer-heading,body.app-surface .management-heading,body.app-surface .section-heading{font-size:14px;line-height:1.6;letter-spacing:normal}
+body.app-surface .workspace-heading p,body.app-surface .billing-heading p,body.app-surface .customer-heading p,body.app-surface .management-heading p,body.app-surface .section-heading p{font-size:14px;line-height:1.7;letter-spacing:normal;margin-top:10px}
+body.app-surface .workspace-heading>div,body.app-surface .billing-heading>div,body.app-surface .customer-heading>div,body.app-surface .management-heading>div{min-width:0;flex:1}
+body.app-surface .workspace-heading>.btn,body.app-surface .billing-heading>.btn,body.app-surface .customer-heading>.btn,body.app-surface .management-heading>.btn{flex-shrink:0;white-space:nowrap;font-size:12px;letter-spacing:normal}
+body.app-surface .metric-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:800px){body.app-surface .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:500px){body.app-surface .customer-heading,body.app-surface .workspace-heading,body.app-surface .billing-heading{align-items:flex-start;flex-direction:column}body.app-surface .metric-grid{grid-template-columns:1fr 1fr}}

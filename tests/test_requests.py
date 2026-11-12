@@ -154,6 +154,7 @@ def test_credit_result_never_uses_template_fallback(tmp_path, monkeypatch):
 def test_workspace_and_history_pages_render(tmp_path):
     app = create_app(make_config(tmp_path), data_dir=tmp_path / 'data')
     client = TestClient(app)
+    client.post('/api/auth/demo')
     for path in ['/workspace?agent=agent-oracle-1', '/requests']:
         response = client.get(path)
         assert response.status_code == 200

@@ -130,7 +130,8 @@ def test_portal_pages_render_with_correct_authorization(tmp_path, monkeypatch):
     assert 'data-mode="admin"' in admin.get('/admin').text
     assert developer.get('/developer').status_code == 200
     assert 'data-mode="developer"' in developer.get('/developer').text
-    assert anon.get('/developer').status_code == 401
+    assert anon.get('/developer', follow_redirects=False).status_code == 303
+    assert anon.get('/api/developer/overview').status_code == 401
 
 
 def test_agent_method_restrictions_and_persistent_settings_reads(tmp_path, monkeypatch):

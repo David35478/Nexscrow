@@ -40,7 +40,8 @@ class JsonStore:
             root = local if _writable(local) else Path(tempfile.gettempdir()) / "nexscrow"
         root.mkdir(parents=True, exist_ok=True)
         self.root = root
-        self._lock = threading.Lock()
+        # Financial mutations may read immutable settings from another collection.
+        self._lock = threading.RLock()
 
     def _path(self, name: str) -> Path:
         return self.root / f"{name}.json"
@@ -126,6 +127,8 @@ class PostgresStore:
         """Read-mutate-write under a row lock; returns mutate's result."""
         with self._connect() as conn:
             with conn.cursor() as cur:
+                # Serialize first insertion too, before a row exists to lock.
+                cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (name,))
                 cur.execute(
                     "SELECT data FROM nexscrow_kv WHERE name = %s FOR UPDATE",
                     (name,),

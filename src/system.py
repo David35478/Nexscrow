@@ -15,7 +15,11 @@ from src.jobs import JobStore
 from src.ledger import Ledger
 from src.payment import PaymentLayer
 from src.reputation import agent_stats, all_agent_stats
-from src.storage import create_store, utcnow
+from src.storage import PostgresStore, create_store, utcnow
+from src.providers.registry import AgentRegistry
+from src.providers.execution import ProviderExecutions
+from src.providers.base import ProviderError
+from src.providers.internal import InternalAdapter, normalize_internal
 
 
 def _dt(value: str) -> datetime:
@@ -26,6 +30,11 @@ class NexscrowSystem:
     def __init__(self, config_path: str = "config.yaml", data_dir: str | None = None):
         self.constraints = Constraints(config_path)
         self.store = create_store(data_dir)
+        from src.management import load_management
+        management = load_management(self.store)
+        for provider_id, settings in management['providers'].items():
+            if provider_id in self.constraints.raw.get('providers', {}):
+                self.constraints.raw['providers'][provider_id].update(settings)
         self.ledger = Ledger(self.store)
         self.jobs = JobStore(self.store)
         self.payment = PaymentLayer(self.constraints)
@@ -34,6 +43,15 @@ class NexscrowSystem:
         self.agent_api = AgentApiClient(
             base_url=self.constraints.raw.get("agent_api", {}).get("url"),
         )
+        self.provider_registry = AgentRegistry(self.store, self.constraints.raw.get("providers", {}))
+        self.provider_executions = ProviderExecutions(self.provider_registry, require_postgres=True)
+        self.internal_agent_ids = list(self.constraints.allowed_agents)
+        for registration in self.provider_registry.agents() if isinstance(self.store, PostgresStore) else []:
+            agent_id = registration["internal_agent_id"]
+            provider_config = self.constraints.raw["providers"][registration["provider_id"]]
+            config = next(a for a in provider_config["agents"] if a["provider_agent_id"] == registration["provider_agent_id"])
+            self.constraints.allowed_agents.append(agent_id)
+            self.constraints.agent_profiles[agent_id] = {"payout_account": config.get("payout_account")}
 
     # ------------------------------------------------------------- jobs
 
@@ -126,6 +144,10 @@ class NexscrowSystem:
     def accept_job(self, job_id: str, agent_id: str) -> dict:
         self.constraints.assert_live()
         self.constraints.check_agent(agent_id)
+        from src.management import load_management
+        override = load_management(self.store)['agents'].get(agent_id)
+        if override and (not override['enabled'] or 'escrow' not in override['payment_methods']):
+            raise ConstraintError('Agent is disabled for escrow execution')
         job = self.jobs.get(job_id)
         if job["status"] != "open":
             raise ConstraintError(f"job {job_id} is '{job['status']}', not open")
@@ -133,6 +155,14 @@ class NexscrowSystem:
             raise ConstraintError(
                 f"job {job_id} has no locked deposit; clients cannot hire before paying"
             )
+        if agent_id.startswith("external-"):
+            registration = self.provider_registry.get(agent_id)
+            if self.payment._simulated(job):
+                raise ProviderError("Demo jobs cannot execute external providers")
+            inputs = job["provider_inputs"] if job.get("provider_inputs") is not None else {"prompt": f"{job['title']}\n{job['description']}\n{job.get('deliverables', '')}"}
+            self.provider_registry.adapters[registration["provider_id"]].validate_inputs(registration, inputs)
+            if job["reward_usd"] > registration["pricing"]["max_task_usd"]:
+                raise ProviderError("Reward exceeds this agent's configured task limit")
         if not self.acceptable_by_rank(job, agent_id):
             raise ConstraintError(
                 f"agent '{agent_id}' rank {agent_stats(self.jobs, agent_id)['rank']}"
@@ -250,10 +280,10 @@ class NexscrowSystem:
             return agent_stats(self.jobs, agent_id)
         return all_agent_stats(self.jobs, self.constraints.allowed_agents)
 
-    def agent_catalog(self) -> list[dict]:
+    def agent_catalog(self, include_disabled=False) -> list[dict]:
         """Marketplace view: profile + live reputation for every allowlisted agent."""
         catalog = []
-        for agent_id in self.constraints.allowed_agents:
+        for agent_id in self.internal_agent_ids:
             profile = self.constraints.agent_profiles.get(agent_id, {})
             stats = agent_stats(self.jobs, agent_id)
             catalog.append(
@@ -274,7 +304,20 @@ class NexscrowSystem:
                     "stats": stats,
                 }
             )
-        return catalog
+        external = self.provider_registry.catalog() if isinstance(self.store, PostgresStore) else []
+        for agent in external:
+            agent["stats"] = agent_stats(self.jobs, agent["agent_id"])
+        internal = [normalize_internal(agent) for agent in catalog]
+        for agent in internal:
+            profile = self.constraints.agent_profiles[agent['agent_id']]
+            agent['credit_cost'] = profile.get('credit_cost')
+            if isinstance(agent['credit_cost'], int) and not isinstance(agent['credit_cost'], bool) and agent['credit_cost'] > 0:
+                agent['supported_payment_methods'].append('credits')
+        from src.management import load_management, public_agent
+        overrides = load_management(self.store)['agents']
+        if include_disabled:
+            return internal + external
+        return [updated for agent in internal + external if (updated := public_agent(agent, overrides)) is not None]
 
     def recommend_agents(self, title: str, description: str = "") -> list[dict]:
         """Rank agents by keyword overlap between the brief and their skills."""
@@ -311,9 +354,27 @@ class NexscrowSystem:
     def run_work(self, job_id: str) -> dict:
         self.constraints.assert_live()
         job = self.jobs.get(job_id)
+        from src.management import load_management
+        override = load_management(self.store)['agents'].get(job.get('agent'))
+        if override and not override['enabled']:
+            raise ConstraintError('Agent execution is disabled by an administrator')
         if job["status"] != "accepted" or not job["agent"]:
             raise ConstraintError(f"job {job_id} must be accepted by an agent first")
         payment_sim = self.payment._simulated(job)
+        if job["agent"].startswith("external-"):
+            if payment_sim or job.get("payment_status") != "locked":
+                raise ProviderError("External execution requires live locked escrow")
+            if job.get("deliverable"):
+                return job
+            registration = self.provider_registry.get(job["agent"])
+            if job["reward_usd"] > registration["pricing"]["max_task_usd"]:
+                raise ProviderError("Reward exceeds this agent's configured task limit")
+            inputs = job["provider_inputs"] if job.get("provider_inputs") is not None else {"prompt": f"{job['title']}\n{job['description']}\n{job.get('deliverables', '')}"}
+            record = self.provider_executions.run(job["agent"], inputs, job_id)
+            import json
+            result = record.get("result")
+            deliverable = result if isinstance(result, str) else json.dumps(result, ensure_ascii=False, indent=2)
+            return self.jobs.update(job_id, deliverable=deliverable, provider_id=record["provider_id"], provider_execution_id=record["provider_execution_id"])
         if not payment_sim and not os.environ.get("NEAR_AI_API_KEY"):
             # No fake deliverables in live mode: refuse rather than template.
             raise ConstraintError(
@@ -325,7 +386,7 @@ class NexscrowSystem:
             job_id=job_id,
             details=f"agent {job['agent']} is producing the deliverable",
         )
-        deliverable = self.agent.generate(job, job["agent"])
+        deliverable = InternalAdapter(self.agent).execute({"provider_agent_id": job["agent"]}, {"job_id": job_id, "job": job, "require_live_result": job.get('require_live_result', False)})["result"]
         return self.jobs.update(job_id, deliverable=deliverable)
 
     def submit_proof(self, job_id: str, content: str | None = None) -> dict:

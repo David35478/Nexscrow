@@ -200,7 +200,12 @@ class PaymentLayer:
                     f"agent '{job['agent']}' has no payout_account configured in"
                     " agent_profiles; funds stay locked in escrow"
                 )
-            payout_tx = self._send(job, destination, self._payout_amount_yocto(job, payout))
+            if not self._escrow_key():
+                raise PaymentError('ESCROW_PRIVATE_KEY is unavailable; funds stay locked')
+            amount = self._payout_amount_yocto(job, payout)
+            job = self._claim_transfer(job, jobs, 'release')
+            payout_tx = self._send(job, destination, amount)
+            jobs.update(job['job_id'], payout_tx_hash=payout_tx)
         ledger.append(
             "funds_released",
             job_id=job["job_id"],
@@ -254,11 +259,14 @@ class PaymentLayer:
                     "cannot refund: the client's NEAR account is unknown;"
                     " the client must confirm the deposit with their wallet"
                 )
+            if not self._escrow_key():
+                raise PaymentError('ESCROW_PRIVATE_KEY is unavailable; funds stay locked')
+            amount = int(job.get('deposit_paid_yocto') or 0) or self._payout_amount_yocto(job, job['reward_usd'])
+            job = self._claim_transfer(job, jobs, 'refund')
             refund_tx = self._send(
-                job, client_account, int(job.get("deposit_paid_yocto") or 0)
-                if job.get("deposit_paid_yocto")
-                else self._payout_amount_yocto(job, job["reward_usd"]),
+                job, client_account, amount,
             )
+            jobs.update(job['job_id'], refund_tx_hash=refund_tx)
         ledger.append(
             "funds_refunded",
             job_id=job["job_id"],
@@ -271,3 +279,21 @@ class PaymentLayer:
         return jobs.update(
             job["job_id"], payment_status="refunded", refund_tx_hash=refund_tx
         )
+
+    def _claim_transfer(self, job, jobs, operation):
+        from src.storage import PostgresStore
+        if os.environ.get('APP_ENV') == 'production' and not isinstance(jobs._store, PostgresStore):
+            raise PaymentError('Production escrow transfers require durable PostgreSQL storage')
+        def claim(records):
+            current = records[job['job_id']]
+            if current.get('transfer_intent') or current['payment_status'] != 'locked':
+                raise PaymentError('Escrow transfer already reserved or finalized; reconcile before retrying')
+            if operation == 'release':
+                today = utcnow()[:10]
+                reserved = sum(r['reward_usd'] for r in records.values() if r.get('transfer_intent', {}).get('operation') == 'release' and r['transfer_intent']['created_at'][:10] == today)
+                legacy = sum(r['reward_usd'] for r in records.values() if not r.get('transfer_intent') and r.get('payment_status') == 'released' and str(r.get('completed_at', ''))[:10] == today)
+                if reserved + legacy + current['reward_usd'] > self.c.max_daily_payout_usd:
+                    raise PaymentError('Daily payout cap exhausted; funds stay locked')
+            current['transfer_intent'] = {'operation': operation, 'status': 'reserved', 'created_at': utcnow()}
+            return dict(current)
+        return jobs._store.update('jobs', {}, claim)

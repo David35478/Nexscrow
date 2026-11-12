@@ -29,14 +29,17 @@ class WorkEngine:
     def __init__(self, constraints: Constraints):
         self.c = constraints
 
-    def generate(self, job: dict, agent_id: str) -> str:
+    def generate(self, job: dict, agent_id: str, *, allow_fallback: bool = True) -> str:
         if self.c.work_engine == "near_ai":
             key = os.environ.get("NEAR_AI_API_KEY")
             if key:
-                return self._near_ai(job, agent_id, key)
+                return self._near_ai(job, agent_id, key, allow_fallback=allow_fallback)
+        if not allow_fallback:
+            from src.providers.base import ProviderError
+            raise ProviderError('Live agent execution is not configured')
         return self._template(job, agent_id)
 
-    def _near_ai(self, job: dict, agent_id: str, key: str) -> str:
+    def _near_ai(self, job: dict, agent_id: str, key: str, *, allow_fallback: bool = True) -> str:
         cfg = self.c.near_ai
         url = str(cfg.get("api_url", "https://api.near.ai/v1/chat/completions"))
         prompt = (
@@ -64,6 +67,9 @@ class WorkEngine:
                 return text.strip()
         except (httpx.HTTPError, KeyError, TypeError, ValueError):
             pass
+        if not allow_fallback:
+            from src.providers.base import ProviderError
+            raise ProviderError('Live agent did not return a verified result')
         return self._template(
             job, agent_id, note="(cloud inference unavailable, template deliverable used)"
         )

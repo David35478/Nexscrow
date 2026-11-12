@@ -131,12 +131,18 @@ def test_api_constraint_errors(tmp_path):
     assert "allowlist" in r.json()["error"]
 
 
-def test_api_kill_switch(tmp_path):
-    c = client(tmp_path)
+def test_api_kill_switch(tmp_path, monkeypatch):
+    app = create_app(config_path=str(make_config(tmp_path)), data_dir=str(tmp_path / "data"))
+    c = TestClient(app)
     login_demo(c)
     job_id = post_job(c, "KS", 1.0)
     c.post(f"/api/jobs/{job_id}/deposit/approve")
-    c.post("/api/admin/kill-switch", json={"enabled": True})
+    assert c.post('/api/admin/kill-switch', json={'enabled': True}).status_code == 403
+    monkeypatch.setenv('NEXSCROW_ADMIN_USER_IDS', 'near:admin.near')
+    from src.auth import SESSION_COOKIE
+    token = app.state.auth.create_session('near', 'near:admin.near', 'Admin')
+    c.cookies.set(SESSION_COOKIE, token)
+    assert c.post("/api/admin/kill-switch", json={"enabled": True}).status_code == 200
     r = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"})
     assert r.status_code == 400
     assert "kill switch" in r.json()["error"]

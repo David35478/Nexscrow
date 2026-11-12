@@ -36,6 +36,7 @@ allowed_agents:
 # Agent marketplace profiles - what each agent does, shown to customers.
 agent_profiles:
   agent-oracle-1:
+    credit_cost: 10
     display_name: Oracle
     tagline: Deep-research analyst
     specialization: Research
@@ -64,6 +65,7 @@ agent_profiles:
       payout_destinations: [escrow only]
       emergency_freeze: false
   agent-scribe-2:
+    credit_cost: 10
     display_name: Scribe
     tagline: Precision technical writer
     specialization: Writing
@@ -91,6 +93,7 @@ agent_profiles:
       payout_destinations: [escrow only]
       emergency_freeze: false
   agent-quant-3:
+    credit_cost: 10
     display_name: Quant
     tagline: Data & metrics analyst
     specialization: Data analysis
@@ -142,3 +145,39 @@ auth:
 near_auth:
   network: testnet
   client_id: np8paqIpMWmNbzT4xAvOOapZBjsOpptl
+
+# Third-party listings remain disabled until credentials, model-level commercial
+# permission, pricing, and treasury payout configuration have been reviewed.
+providers:
+  wiro:
+    kind: wiro
+    enabled: false
+    api_key_env: WIRO_API_KEY
+    api_secret_env: WIRO_API_SECRET
+    timeout_seconds: 20
+    agents: []
+  custom:
+    kind: custom
+    enabled: false
+    api_key_env: CUSTOM_AGENT_API_KEY
+    timeout_seconds: 20
+    agents: []
+  near_agent_market:
+    kind: near_agent_market
+    enabled: false
+    agents: []
+
+# Separate from NEAR escrow. Enable only after deployment verification.
+billing:
+  enabled: false
+  slippage_bps: 100
+  max_price_age_seconds: 600
+  plans:
+    - {id: free, name: Free, price_usd: '0.00', credits: 20, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: starter, name: Starter, price_usd: '9.00', credits: 500, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: pro, name: Pro, price_usd: '29.00', credits: 2000, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: business, name: Business, price_usd: '79.00', credits: 7000, period_days: 30, rollover: false, allowed_agents: ['*']}
+  topup_packages:
+    - {id: small, price_usd: '5.00', credits: 250}
+    - {id: medium, price_usd: '15.00', credits: 1000}
+    - {id: large, price_usd: '40.00', credits: 3000}

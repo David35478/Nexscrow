@@ -1,0 +1,8 @@
+{% from 'marketplace_components.html' import site_header %}
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Management — Nexscrow</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/marketplace.css"><link rel="stylesheet" href="/static/management.css"></head>
+<body>{{ site_header() }}<main class="container management" data-mode="{{ mode }}">
+<header class="management-heading"><div><p class="eyebrow">NEXSCROW · {{ 'OPERATIONS' if mode == 'admin' else 'BUILDER PORTAL' }}</p><h1>{{ 'Marketplace administration' if mode == 'admin' else 'Developer portal' }}</h1><p>{{ 'Review marketplace health, listings, providers, and financial records.' if mode == 'admin' else 'Register agents for review and track their activity.' }}</p></div><span class="secure-pill">{{ 'Admin workspace' if mode == 'admin' else 'Developer workspace' }}</span></header>
+<div id="portal-notice" class="portal-notice" role="status" hidden></div><div id="portal-loading" class="portal-loading">Loading your workspace…</div><section id="portal-error" class="portal-card" hidden><h2>Workspace unavailable</h2><p id="portal-error-text"></p><button class="portal-button" id="portal-retry">Try again</button></section>
+<div id="portal-app" hidden><nav id="portal-tabs" class="portal-tabs" aria-label="Workspace sections"></nav><div id="portal-content"></div></div></main>
+<script src="/static/management.js" defer></script></body></html>

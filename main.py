@@ -232,7 +232,7 @@ def create_app(
     templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
     app.mount('/landing-assets', StaticFiles(directory=str(BASE_DIR / 'static' / 'landing-export'), check_dir=False), name='landing_assets')
-    app.mount('/images', StaticFiles(directory=str(BASE_DIR / 'frontend' / 'public' / 'images')), name='template_images')
+    app.mount('/images', StaticFiles(directory=str(BASE_DIR / 'static' / 'landing-export' / 'images')), name='template_images')
 
     def _handler(status_code: int):
         def inner(request: Request, exc: Exception) -> JSONResponse:

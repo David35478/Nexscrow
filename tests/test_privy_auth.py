@@ -70,12 +70,13 @@ def test_unconfigured_and_alias(monkeypatch):
     assert privy_auth.app_id() == 'alias-app'
 
 
-def test_login_portal_demo_and_legacy_near(tmp_path, monkeypatch):
+def test_unified_login_portal_and_demo(tmp_path, monkeypatch):
     monkeypatch.delenv('PRIVY_APP_ID', raising=False)
     monkeypatch.delenv('NEXT_PUBLIC_PRIVY_APP_ID', raising=False)
     c = TestClient(create_app(config_path=make_config(tmp_path), data_dir=str(tmp_path / 'data')))
     assert 'DAPPS PORTAL' in c.get('/login').text
     assert 'Connect NEAR wallet' in c.get('/login?method=near').text
+    assert c.get('/login?method=near').text == c.get('/login').text
     assert c.post('/api/auth/privy/verify', json={'access_token': 'invalid'}).status_code == 400
     assert c.get('/api/auth/session').json()['user'] is None
     assert c.post('/api/auth/demo').json()['user']['provider'] == 'demo'

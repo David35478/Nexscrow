@@ -105,6 +105,12 @@ class AccountSettings(BaseModel):
     notifications: NotificationPreferences
 
 
+class AgentRecommendation(BaseModel):
+    model_config = {"extra": "forbid"}
+    title: str = Field(min_length=1, max_length=120)
+    description: str = Field(default="", max_length=1000)
+
+
 class ManagedAgent(BaseModel):
     model_config = {'extra': 'forbid'}
     name: str = Field(min_length=1, max_length=120)
@@ -442,8 +448,6 @@ def create_app(
     async def login_portal(request: Request):
         if current_user(request):
             return RedirectResponse('/app', status_code=303)
-        if request.query_params.get('method') == 'near':
-            return templates.TemplateResponse(request=request, name='login.html', context={})
         return FileResponse(BASE_DIR / 'static' / 'landing-export' / 'portal.html', media_type='text/html')
 
     @app.get('/app')
@@ -832,6 +836,10 @@ def create_app(
     @app.get("/api/agents/recommend")
     async def recommend(title: str, description: str = "") -> dict:
         return {"agents": system.recommend_agents(title, description)}
+
+    @app.post("/api/agents/recommend")
+    async def recommend_from_brief(body: AgentRecommendation) -> dict:
+        return {"agents": system.recommend_agents(body.title, body.description)}
 
     @app.get("/api/leaderboard")
     async def leaderboard() -> dict:

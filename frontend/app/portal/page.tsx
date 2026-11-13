@@ -38,10 +38,10 @@ function LoginOptions() {
   })
 
   return <>
-    <button className="portal-primary" disabled={!ready || busy} onClick={() => authenticated ? enterApp() : login({ loginMethods: ["wallet", "google"] })}>
-      {busy ? "Entering…" : authenticated ? "Enter app" : "Sign in with wallet or Google"}
+    <button className="portal-primary" disabled={!ready || busy} onClick={() => authenticated ? enterApp() : login({ loginMethods: ["google"] })}>
+      {busy ? "Entering…" : authenticated ? "Enter app" : "Continue with Google"}
     </button>
-    {authenticated && <button className="portal-secondary" disabled={busy} onClick={() => logout()}>Use another account</button>}
+    {authenticated && <button className="portal-secondary" disabled={busy} onClick={() => logout()}>Use another Google account</button>}
     {authenticated && <p className="portal-note">Signed in securely. Continue to enter the app.</p>}
     {error && <p role="alert" className="portal-error">{error}</p>}
   </>
@@ -52,12 +52,21 @@ export default function Portal() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [demoBusy, setDemoBusy] = useState(false)
+  const [nearReady, setNearReady] = useState(false)
+  const [nearBusy, setNearBusy] = useState(false)
 
   useEffect(() => {
+    const script = document.createElement("script")
+    script.src = "/static/near.js"
+    script.async = true
+    script.onload = () => setNearReady(true)
+    script.onerror = () => setError("NEAR wallet sign-in could not be loaded. Please refresh and retry.")
+    document.body.appendChild(script)
     fetch("/api/auth/privy/config").then(response => {
       if (!response.ok) throw new Error("Unable to load sign-in configuration")
       return response.json()
     }).then(data => setAppId(data.app_id)).catch(() => setError("Sign-in is temporarily unavailable. Please retry.")).finally(() => setLoading(false))
+    return () => { script.remove() }
   }, [])
 
   async function enterDemo() {
@@ -65,6 +74,20 @@ export default function Portal() {
     setError("")
     try { await exchangeSession("/api/auth/demo") }
     catch { setError("Could not start demo mode. Please try again."); setDemoBusy(false) }
+  }
+
+  async function connectNear() {
+    setNearBusy(true)
+    setError("")
+    try {
+      const connector = (window as Window & { connectNearWallet?: () => Promise<void> }).connectNearWallet
+      if (!connector) throw new Error("NEAR wallet sign-in is still loading. Please try again.")
+      await connector()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "NEAR wallet sign-in failed")
+    } finally {
+      setNearBusy(false)
+    }
   }
 
   return <main className="portal-shell">
@@ -83,12 +106,12 @@ export default function Portal() {
       <a className="portal-brand" href="/">NEXSCROW ↗</a>
       <p className="portal-label">DAPPS PORTAL</p>
       <h1>Your next agent starts here.</h1>
-      <p className="portal-copy">Sign in with your wallet or Google to enter the app. New here? Explore the full workflow in demo mode first.</p>
-      {loading ? <p role="status">Loading secure sign-in…</p> : appId ? <PrivyProvider appId={appId} config={{ loginMethods: ["wallet", "google"], appearance: { theme: "light", accentColor: "#171717" } }}><LoginOptions /></PrivyProvider> : <p className="portal-note">Live sign-in is not configured. Demo mode is still available.</p>}
-      <p className="portal-note">Paying with NEAR? <a href="/login?method=near" style={{ textDecoration: "underline" }}>Connect a NEAR wallet</a> for the existing escrow flow. Privy sign-in does not fund a NEAR wallet.</p>
+      <p className="portal-copy">Sign in with Google via Privy, connect a NEAR wallet, or explore the workflow in demo mode.</p>
+      {loading ? <p role="status">Loading Google sign-in…</p> : appId ? <PrivyProvider appId={appId} config={{ loginMethods: ["google"], appearance: { theme: "light", accentColor: "#171717" } }}><LoginOptions /></PrivyProvider> : <p className="portal-note">Google sign-in is not configured on this deployment.</p>}
+      <button id="near-btn" className="portal-secondary" disabled={!nearReady || nearBusy} onClick={connectNear}>{nearBusy ? "Opening NEAR wallet…" : "Connect NEAR wallet"}</button>
       <div className="portal-divider" />
       <button className="portal-secondary" disabled={demoBusy} onClick={enterDemo}>{demoBusy ? "Starting demo…" : "Enter demo mode"}</button>
-      <p className="portal-note">Simulated funds, agent work, and payments. No real money moves in demo mode. Live sign-in never authorizes a payment.</p>
+      <p className="portal-note">Use Google for social sign-in or connect a NEAR wallet for wallet sign-in. Demo funds and payments are simulated; signing in never authorizes a payment.</p>
       {error && <p role="alert" className="portal-error">{error}</p>}
       <div className="portal-footer"><a href="/">← Back to landing</a><span>Agents · $0.10 / call</span></div>
     </section>

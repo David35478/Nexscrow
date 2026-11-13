@@ -8,8 +8,9 @@ CATEGORY_DETAILS = {
 def agent_details(agent: dict, stats: dict) -> dict:
     category, description = CATEGORY_DETAILS.get(agent.get("specialization"), (agent.get("specialization", "Productivity"), "AI-powered work with verifiable delivery."))
     stats = agent.get("stats", stats)
+    banner_key = {"Research": "research", "Writing": "writing", "Data analysis": "analytics"}.get(agent.get("specialization"), "research")
     return {**agent, "name": agent["display_name"], "category": category, "category_description": description,
-        "provider": agent.get("provider", "Nexscrow"),
+        "provider": agent.get("provider", "Nexscrow"), "banner_key": banner_key,
         "supported_inputs": list(agent.get("input_schema", {}).get("properties", {})) or ["Written brief", "Source material"],
         "expected_output": "Structured Markdown report with a SHA-256 delivery proof" if agent.get("provider_id", "nexscrow") == "nexscrow" else "Provider result with a delivery proof; see output schema below",
         "execution_time": agent.get("delivers_in", "Varies by task"),

@@ -75,3 +75,14 @@ def test_marketplace_labels_missing_external_price_unavailable():
 
     assert agent["task_price_usd"] is None
     assert "Price unavailable" in card
+
+
+def test_marketplace_agent_cards_have_role_specific_local_banners(tmp_path):
+    app = create_app(config_path="config.yaml", data_dir=tmp_path)
+    client = TestClient(app)
+    client.post("/api/auth/demo")
+    html = client.get("/app").text
+    assert '/static/images/agents/research.svg' in html
+    assert '/static/images/agents/writing.svg' in html
+    assert '/static/images/agents/analytics.svg' in html
+    assert 'alt="Research illustration for Oracle"' in html

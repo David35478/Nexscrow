@@ -1,5 +1,6 @@
 {% macro agent_card(agent) %}
 <article class="discovery-card" data-agent-card data-category="{{ agent.category|lower }}" data-search="{{ (agent.name ~ ' ' ~ agent.description ~ ' ' ~ agent.provider ~ ' ' ~ agent.skills|join(' '))|lower }}">
+<img class="agent-card-banner" src="/static/images/agents/{{ agent.banner_key }}.svg" alt="{{ agent.category }} illustration for {{ agent.name }}" loading="lazy">
 <div class="agent-card-top"><span class="agent-monogram">{{ agent.name[0] }}</span><span class="agent-category">{{ agent.category }}</span></div>
 <div class="agent-title-row"><h3>{{ agent.name }}</h3>{% if agent.verified %}<span class="verified-mark" title="Verified provider">✓</span>{% endif %}</div>
 <p class="agent-provider">by {{ agent.provider }}</p><p class="agent-description">{{ agent.description }}</p>

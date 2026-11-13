@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
+from src import privy_auth
 from src.auth import SESSION_COOKIE, AuthError, AuthService
 from src.constraints import ConstraintError
 from src.env import load_env
@@ -170,6 +171,10 @@ class KillSwitch(BaseModel):
 class DepositConfirm(BaseModel):
     tx_hash: str = Field(min_length=8, max_length=128)
     signer_id: str = Field(default="", max_length=128)
+
+
+class PrivyToken(BaseModel):
+    access_token: str = Field(min_length=1, max_length=16384)
 
 
 class NearVerify(BaseModel):
@@ -437,7 +442,9 @@ def create_app(
     async def login_portal(request: Request):
         if current_user(request):
             return RedirectResponse('/app', status_code=303)
-        return templates.TemplateResponse(request=request, name='login.html', context={})
+        if request.query_params.get('method') == 'near':
+            return templates.TemplateResponse(request=request, name='login.html', context={})
+        return FileResponse(BASE_DIR / 'static' / 'landing-export' / 'portal.html', media_type='text/html')
 
     @app.get('/app')
     async def app_home(request: Request):
@@ -652,6 +659,18 @@ def create_app(
             SESSION_COOKIE, token, httponly=True, secure=os.environ.get("APP_ENV") == "production", samesite="lax", max_age=24 * 3600
         )
         return response
+
+    @app.post("/api/auth/privy/verify")
+    def privy_verify(body: PrivyToken, request: Request):
+        subject = privy_auth.verify_access_token(body.access_token)
+        token = auth.create_session("privy", f"privy:{subject}", "Privy account")
+        response = JSONResponse({"ok": True, "user": auth.get_user(token)})
+        response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax", max_age=86400, secure=os.environ.get("APP_ENV") == "production")
+        return response
+
+    @app.get("/api/auth/privy/config")
+    def privy_config():
+        return {"app_id": privy_auth.app_id() or None}
 
     @app.post("/api/auth/fastauth/verify")
     async def fastauth_verify(body: FastAuthVerify) -> dict:

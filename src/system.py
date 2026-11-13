@@ -311,6 +311,20 @@ class NexscrowSystem:
         for agent in internal:
             profile = self.constraints.agent_profiles[agent['agent_id']]
             agent['credit_cost'] = profile.get('credit_cost')
+            task_price = dict(profile.get('pricing') or {}).get('task_price_usd')
+            if task_price is None:
+                cap = agent.get('policy', {}).get('max_txn_usd')
+                task_price = min(
+                    cap if cap is not None else self.constraints.max_job_reward_usd,
+                    self.constraints.max_job_reward_usd,
+                )
+            agent['pricing'] = {
+                **agent.get('pricing', {}),
+                **dict(profile.get('pricing') or {}),
+                'max_task_usd': agent.get('policy', {}).get('max_txn_usd'),
+                'credit_cost': profile.get('credit_cost'),
+                'task_price_usd': task_price,
+            }
             if isinstance(agent['credit_cost'], int) and not isinstance(agent['credit_cost'], bool) and agent['credit_cost'] > 0:
                 agent['supported_payment_methods'].append('credits')
         from src.management import load_management, public_agent

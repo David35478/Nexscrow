@@ -647,7 +647,7 @@ export default function NexscrowPage() {
                 type="submit"
                 className="px-8 py-3 bg-[#111] text-white text-sm rounded-xl hover:bg-[#333] transition-colors tracking-widest font-medium"
               >
-                ENTER APP
+                ENTER DAPPS
               </button>
             </form>
           ) : (

@@ -13,6 +13,7 @@ def agent_details(agent: dict, stats: dict) -> dict:
         "supported_inputs": list(agent.get("input_schema", {}).get("properties", {})) or ["Written brief", "Source material"],
         "expected_output": "Structured Markdown report with a SHA-256 delivery proof" if agent.get("provider_id", "nexscrow") == "nexscrow" else "Provider result with a delivery proof; see output schema below",
         "execution_time": agent.get("delivers_in", "Varies by task"),
+        "task_price_usd": (agent.get("pricing") or {}).get("task_price_usd"),
         "max_transaction_usd": agent.get("policy", {}).get("max_txn_usd", 0.0),
         "usage_requirements": "A clear task brief and any source material needed to complete it.",
         "credit_cost": agent.get("credit_cost"), "stats": stats}

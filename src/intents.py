@@ -9,6 +9,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Any
+import os
+
 import httpx
 
 
@@ -72,6 +74,72 @@ class OneClickClient:
         if deposit_memo is not None:
             params["depositMemo"] = deposit_memo
         return self._request("GET", "/v0/status", params=params)
+
+
+TESTNET_UNSUPPORTED = (
+    "NEAR Intents 1Click has no testnet deployment, so subscription and top-up"
+    " settlement is unavailable on NEAR Testnet"
+)
+
+
+class TestnetUnavailableClient:
+    """Testnet adapter: refuses every call rather than reaching mainnet 1Click."""
+
+    def close(self) -> None:
+        pass
+
+    def tokens(self) -> list[dict[str, Any]]:
+        raise IntentsError(TESTNET_UNSUPPORTED)
+
+    def quote(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raise IntentsError(TESTNET_UNSUPPORTED)
+
+    def status(self, deposit_address: str, deposit_memo: str | None = None) -> dict[str, Any]:
+        raise IntentsError(TESTNET_UNSUPPORTED)
+
+
+class MockOneClickClient(TestnetUnavailableClient):
+    """Development-only stand-in that mirrors 1Click response shapes.
+
+    Orders never reach SUCCESS, so the mock can never grant credits.
+    """
+
+    MOCK = True
+
+    def tokens(self) -> list[dict[str, Any]]:
+        now = datetime.now(timezone.utc).isoformat()
+        return [
+            {"assetId": "nep141:mock-usdc.testnet", "symbol": "mUSDC", "blockchain": "near",
+             "decimals": 6, "price": "1", "priceUpdatedAt": now, "mock": True},
+            {"assetId": "nep141:mock-wnear.testnet", "symbol": "mwNEAR", "blockchain": "near",
+             "decimals": 24, "price": "3", "priceUpdatedAt": now, "mock": True},
+        ]
+
+    def quote(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if not isinstance(payload, dict) or not payload.get("amount"):
+            raise IntentsError("Invalid quote request")
+        quote = {"amountIn": payload["amount"], "minAmountIn": payload["amount"],
+                 "amountOut": payload["amount"], "amountInUsd": "0", "amountOutUsd": "0",
+                 "deadline": payload.get("deadline")}
+        if not payload.get("dry"):
+            quote["depositAddress"] = "mock-1click-deposit.testnet"
+        return {"quoteRequest": dict(payload), "quote": quote,
+                "correlationId": "mock-correlation", "signature": "mock-signature", "mock": True}
+
+    def status(self, deposit_address: str, deposit_memo: str | None = None) -> dict[str, Any]:
+        return {"status": "PENDING_DEPOSIT", "mock": True}
+
+
+def one_click_client(api_key: str | None = None):
+    """1Click adapter for the active build.
+
+    Only NEAR Testnet is enabled, and 1Click is mainnet-only, so the real
+    client is never constructed here. NEXSCROW_INTENTS_MOCK=1 enables the
+    development mock outside production.
+    """
+    if os.environ.get("NEXSCROW_INTENTS_MOCK") == "1" and os.environ.get("APP_ENV") != "production":
+        return MockOneClickClient()
+    return TestnetUnavailableClient()
 
 
 def _same(a: Any, b: Any) -> bool:

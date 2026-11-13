@@ -100,10 +100,12 @@ export default function Portal() {
       .portal-primary{background:#171717;color:white;border:1px solid #171717}.portal-primary:hover{background:#333}.portal-secondary{background:white;border:1px solid #ddd;margin-top:12px;color:#171717}
       .portal-card button:disabled{opacity:.5;cursor:wait}.portal-note{font-size:12px;color:#777;line-height:1.7;margin-top:14px}.portal-divider{border-top:1px solid #eee;margin:28px 0 20px}.portal-error{color:#b42318;font-size:13px;line-height:1.5}
       .portal-footer{display:flex;justify-content:space-between;margin-top:28px;font-size:12px;color:#777}.portal-footer a{color:inherit}
+      .portal-testnet{margin-left:10px;padding:3px 8px;border-radius:999px;background:#fff4d6;border:1px solid #e8c56a;color:#7a5200;font-size:10px;font-weight:700;letter-spacing:.12em}
       @media(max-width:480px){.portal-card{padding:28px}.portal-card h1{font-size:29px}}
     `}</style>
     <section className="portal-card">
       <a className="portal-brand" href="/">NEXSCROW ↗</a>
+      <span className="portal-testnet" title="NEAR Testnet: test tokens with no real monetary value">TESTNET</span>
       <p className="portal-label">DAPPS PORTAL</p>
       <h1>Your next agent starts here.</h1>
       <p className="portal-copy">Sign in with Google via Privy, connect a NEAR wallet, or explore the workflow in demo mode.</p>
@@ -111,7 +113,7 @@ export default function Portal() {
       <button id="near-btn" className="portal-secondary" disabled={!nearReady || nearBusy} onClick={connectNear}>{nearBusy ? "Opening NEAR wallet…" : "Connect NEAR wallet"}</button>
       <div className="portal-divider" />
       <button className="portal-secondary" disabled={demoBusy} onClick={enterDemo}>{demoBusy ? "Starting demo…" : "Enter demo mode"}</button>
-      <p className="portal-note">Use Google for social sign-in or connect a NEAR wallet for wallet sign-in. Demo funds and payments are simulated; signing in never authorizes a payment.</p>
+      <p className="portal-note">Use Google for social sign-in or connect a NEAR Testnet wallet (accounts ending in .testnet). Payments use NEAR Testnet test tokens with no real monetary value. Demo funds and payments are simulated; signing in never authorizes a payment.</p>
       {error && <p role="alert" className="portal-error">{error}</p>}
       <div className="portal-footer"><a href="/">← Back to landing</a><span>Agents · $0.10 / call</span></div>
     </section>

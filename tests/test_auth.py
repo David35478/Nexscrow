@@ -60,7 +60,7 @@ def test_challenge_is_single_use(tmp_path):
 
 def test_nep413_signature_verification(tmp_path):
     auth = make_auth(tmp_path)
-    account = "alice.near"
+    account = "alice.testnet"
     signing_key = SigningKey.generate()
     verify_key = signing_key.verify_key
     pubkey_b58 = b58(bytes(verify_key))
@@ -104,7 +104,7 @@ def test_nep413_signature_verification_wallet_format(tmp_path):
     """Real wallet conditions: 'ed25519:'-prefixed key, Borsh None-option
     payload (callbackUrl absent), base64 signature from injected wallets."""
     auth = make_auth(tmp_path)
-    account = "yurrri.near"
+    account = "nexscrow-escrow.testnet"
     signing_key = SigningKey.generate()
     pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
 
@@ -177,7 +177,7 @@ def test_near_login_rejects_bad_signature(tmp_path):
     signing_key = SigningKey.generate()
     with pytest.raises(AuthError, match="verification"):
         auth.verify_near_login(
-            account_id="alice.near",
+            account_id="alice.testnet",
             public_key=b58(bytes(signing_key.verify_key)),
             signature=b58(signing_key.sign(b"other message").signature),
             nonce=challenge["nonce"],
@@ -190,7 +190,7 @@ def test_failed_attempt_keeps_challenge_retryable(tmp_path):
     every retry said 'already used'. Now the challenge is consumed only on
     success, so a retry with the same nonce verifies."""
     auth = make_auth(tmp_path)
-    account = "alice.near"
+    account = "alice.testnet"
     signing_key = SigningKey.generate()
     pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
 
@@ -248,7 +248,7 @@ def test_valid_signature_burns_challenge_even_on_rpc_failure(tmp_path):
     is consumed even if the access-key RPC check fails - a captured
     callback-URL signature can never be replayed for a second login."""
     auth = make_auth(tmp_path)
-    account = "alice.near"
+    account = "alice.testnet"
     signing_key = SigningKey.generate()
     pubkey_b58 = "ed25519:" + b58(bytes(signing_key.verify_key))
 
@@ -297,7 +297,7 @@ def test_near_login_rejects_replayed_nonce(tmp_path):
     auth.delete_challenge(challenge["nonce"])
     with pytest.raises(AuthError, match="challenge"):
         auth.verify_near_login(
-            account_id="alice.near",
+            account_id="alice.testnet",
             public_key="ed25519:whatever",
             signature="deadbeef",
             nonce=challenge["nonce"],

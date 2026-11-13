@@ -70,7 +70,7 @@ def test_live_job_deposit_address_is_escrow_account(tmp_path):
     sys_ = c.app.state.system
     job = sys_.post_job("Live job", "", 3.0, simulated=False)
     assert job["simulated"] is False
-    assert job["deposit_address"] == "yurrri.near"
+    assert job["deposit_address"] == "nexscrow-escrow.testnet"
 
 
 def test_api_full_lifecycle_with_approval(tmp_path):
@@ -153,7 +153,7 @@ def test_config_reports_auth_capabilities(tmp_path):
     c = client(tmp_path)
     auth = c.get("/api/config").json()["auth"]
     assert auth["google_configured"] is False
-    assert auth["near_network"] == "mainnet"
+    assert auth["near_network"] == "testnet"
 
 
 def test_config_reports_near_auth(tmp_path):

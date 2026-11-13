@@ -20,6 +20,7 @@ from src.constraints import ConstraintError
 from src.env import load_env
 from src.escrow import ReleaseBlocked
 from src.jobs import JobNotFound
+from src import network as near_network
 from src.near_chain import NearChainError, NearChainTransportError
 from src.payment import PaymentError
 from src.system import NexscrowSystem
@@ -254,6 +255,7 @@ def create_app(
     for exc, code in (
         (ConstraintError, 400),
         (PaymentError, 400),
+        (near_network.NetworkError, 409),
         (NearChainTransportError, 502),
         (NearChainError, 400),
         (AuthError, 400),
@@ -694,28 +696,27 @@ def create_app(
     @app.get("/api/config")
     async def config() -> dict:
         view = system.public_view()
+        chain = near_network.status(system.constraints.raw)
+        view["network"] = chain
         view["auth"] = {
             "google_configured": auth.google_configured(),
-            "near_network": system.constraints.auth.get("near_network", "mainnet"),
-            "near_sign_in_contract": system.constraints.auth.get(
-                "near_sign_in_contract", "intents.near"
-            ),
+            # Wallet sign-in always uses testnet accounts; it never moves funds.
+            "near_network": near_network.TESTNET.network_id,
+            "near_sign_in_contract": system.constraints.auth.get("near_sign_in_contract"),
         }
         near_auth_cfg = dict(system.constraints.near_auth)
-        if os.environ.get("NEAR_AUTH_NETWORK"):
-            near_auth_cfg["network"] = os.environ["NEAR_AUTH_NETWORK"]
         if os.environ.get("NEAR_AUTH_CLIENT_ID"):
             near_auth_cfg["client_id"] = os.environ["NEAR_AUTH_CLIENT_ID"]
         view["near_auth"] = (
             {
-                "network": near_auth_cfg.get("network", "testnet"),
+                "network": near_network.TESTNET.fast_auth_network,
                 "client_id": near_auth_cfg.get("client_id", ""),
             }
             if near_auth_cfg.get("client_id")
             else None
         )
         view["live_agents_ready"] = bool(os.environ.get("NEAR_AI_API_KEY"))
-        view["live_payouts_ready"] = bool(os.environ.get("ESCROW_PRIVATE_KEY"))
+        view["live_payouts_ready"] = bool(os.environ.get("ESCROW_PRIVATE_KEY")) and chain["enabled"]
         return view
 
     @app.get("/api/jobs")

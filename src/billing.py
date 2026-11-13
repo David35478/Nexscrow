@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from uuid import uuid4
 
 from src.credits import CreditService
-from src.intents import OneClickClient, IntentsError, verify_settlement
+from src.intents import IntentsError, one_click_client, verify_settlement
 from src.storage import PostgresStore, utcnow
 
 
@@ -38,7 +38,7 @@ class BillingService:
     def __init__(self, store, config=None, client=None):
         self.store = store
         self.config = config or {}
-        self.client = client or OneClickClient(os.environ.get('ONECLICK_API_KEY'))
+        self.client = client or one_click_client(os.environ.get('ONECLICK_API_KEY'))
         self.credits = CreditService(store)
 
     def _update(self, mutate):

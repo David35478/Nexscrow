@@ -15,13 +15,17 @@ import httpx
 
 
 class AgentApiClient:
+    # The Agent API is a mainnet beta with no testnet deployment. While only
+    # NEAR Testnet is enabled it stays off and agent_profiles policies apply.
+    network_supported = False
+
     def __init__(self, base_url: str | None = None, api_key: str | None = None):
         self.base_url = (base_url or "https://api.agentsonintents.com").rstrip("/")
         self.api_key = api_key or os.environ.get("NEAR_INTENTS_AGENT_API_KEY") or None
 
     @property
     def configured(self) -> bool:
-        return bool(self.api_key)
+        return bool(self.api_key) and self.network_supported
 
     def _headers(self) -> dict:
         if not self.api_key:

@@ -654,8 +654,10 @@ class NexscrowSystem:
             "constraints": self.constraints.public_view(),
             "stats": self.board()["stats"],
             "escrow_account": (
-                self.constraints.escrow.get("account")
+                os.environ.get("NEXSCROW_ESCROW_ACCOUNT")
+                or self.constraints.escrow.get("account")
                 or self.constraints.intents.get("escrow_account")
+                or None
             ),
             "agent_api_configured": self.agent_api.configured,
             "live_payouts_ready": bool(os.environ.get("ESCROW_PRIVATE_KEY")),

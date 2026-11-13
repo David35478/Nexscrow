@@ -14,7 +14,7 @@ BASE_CONFIG = {
     "protocol_fee_percent": 2.0,
     "job_timeout_minutes": 60,
     "work_engine": "demo",
-    "escrow": {"account": "yurrri.near", "rpc_url": "https://rpc.mainnet.near.org"},
+    "escrow": {"account": "nexscrow-escrow.testnet", "rpc_url": "https://rpc.testnet.near.org"},
     "near_auth": {"network": "testnet", "client_id": "np8paqIpMWmNbzT4xAvOOapZBjsOpptl"},
     "agent_profiles": {
         "agent-oracle-1": {
@@ -25,7 +25,7 @@ BASE_CONFIG = {
             "description": "Oracle turns a one-line brief into a structured research report.",
             "capabilities": ["Structured research reports", "Market analysis", "Risk assessment"],
             "delivers_in": "~1 minute",
-            "payout_account": "agent-op.near",
+            "payout_account": "agent-op.testnet",
             "verified": True,
             "policy": {"max_txn_usd": 25.0, "payout_destinations": ["escrow only"]},
         },
@@ -37,7 +37,7 @@ BASE_CONFIG = {
             "description": "Scribe writes tight, well-sourced documents.",
             "capabilities": ["Technical summaries", "Editorial structuring"],
             "delivers_in": "~1 minute",
-            "payout_account": "agent-op.near",
+            "payout_account": "agent-op.testnet",
         },
         "agent-quant-3": {
             "display_name": "Quant",
@@ -47,7 +47,7 @@ BASE_CONFIG = {
             "description": "Quant digs into numbers and benchmarks.",
             "capabilities": ["Data and metrics analysis"],
             "delivers_in": "~1 minute",
-            "payout_account": "agent-op.near",
+            "payout_account": "agent-op.testnet",
         }
     },
 }

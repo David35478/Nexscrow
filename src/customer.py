@@ -2,6 +2,7 @@
 from collections import defaultdict
 from datetime import datetime, timezone
 
+from src import network
 from src.storage import utcnow
 
 
@@ -95,7 +96,7 @@ class CustomerService:
             stats = agent_usage.get(agent_id, {})
             agents.append({'agent_id': agent_id, 'name': stats.get('name', (metadata or {}).get('display_name', agent_id)), 'provider': stats.get('provider', (metadata or {}).get('provider_id', 'Unavailable provider')), 'usage_count': stats.get('usage_count', 0), 'last_used': stats.get('last_used'), 'payment_methods': (metadata or {}).get('supported_payment_methods', []), 'available': metadata is not None, 'relationship': 'used' if stats else 'plan_access'})
         agents.sort(key=lambda a: (a['last_used'] or '', a['name']), reverse=True)
-        escrow = [{key: job.get(key) for key in ['job_id', 'title', 'status', 'payment_status', 'deposit_tx_hash', 'payout_tx_hash', 'refund_tx_hash', 'created_at', 'simulated']} | {'amount_usd': job['reward_usd']} for job in jobs]
+        escrow = [{key: job.get(key) for key in ['job_id', 'title', 'status', 'payment_status', 'deposit_tx_hash', 'payout_tx_hash', 'refund_tx_hash', 'created_at', 'simulated']} | {'amount_usd': job['reward_usd'], 'explorer_tx_base': None if job.get('simulated') else f"{network.TESTNET.explorer_url}/txns/"} for job in jobs]
         activity = [{'at': r['created_at'], 'title': r['agent_name'], 'detail': r['status'].replace('_', ' ') + ' · ' + r['payment_method'], 'href': '/workspace?request=' + r['request_id']} for r in requests]
         activity += [{'at': p['created_at'], 'title': 'Subscription payment' if p['purpose'] == 'subscription' else 'Credit top-up', 'detail': p['status'], 'href': '/billing'} for p in payments]
         activity += [{'at': j['created_at'], 'title': j['title'], 'detail': 'Escrow task · ' + j['status'], 'href': '/job/' + j['job_id']} for j in legacy]

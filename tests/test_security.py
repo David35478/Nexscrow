@@ -34,7 +34,7 @@ def test_production_cookie_and_canonical_origin(tmp_path, monkeypatch):
 
 def test_live_execution_requires_job_owner(tmp_path):
     app = create_app(make_config(tmp_path), data_dir=tmp_path/'data')
-    job = app.state.system.post_job('live','brief',3,client_id='near:owner.near',simulated=False)
+    job = app.state.system.post_job('live','brief',3,client_id='near:owner.testnet',simulated=False)
     c = TestClient(app)
     for suffix, body in [('accept',{'agent_id':'agent-oracle-1'}),('work',{}),('proof',{}),('agent-run',{'agent_id':'agent-oracle-1'})]:
         assert c.post(f"/api/jobs/{job['job_id']}/{suffix}",json=body).status_code == 401
@@ -42,10 +42,10 @@ def test_live_execution_requires_job_owner(tmp_path):
 
 def test_concurrent_release_and_refund_claim_one_transfer(make_system, monkeypatch):
     system = make_system()
-    job = system.post_job('Live','brief',3,client_id='near:buyer.near',simulated=False)
-    system.jobs.update(job['job_id'],status='delivered',agent='agent-oracle-1',payment_status='locked',deposit_paid_yocto=str(10**24),client_account='buyer.near')
+    job = system.post_job('Live','brief',3,client_id='near:buyer.testnet',simulated=False)
+    system.jobs.update(job['job_id'],status='delivered',agent='agent-oracle-1',payment_status='locked',deposit_paid_yocto=str(10**24),client_account='buyer.testnet')
     job = system.jobs.get(job['job_id'])
-    system.constraints.agent_profiles['agent-oracle-1']['payout_account']='agent.near'
+    system.constraints.agent_profiles['agent-oracle-1']['payout_account']='agent.testnet'
     monkeypatch.setenv('ESCROW_PRIVATE_KEY','test-signing-key-never-sent')
     entered, finish = Event(), Event()
     calls=[]
@@ -64,8 +64,8 @@ def test_concurrent_release_and_refund_claim_one_transfer(make_system, monkeypat
 
 def test_ambiguous_transfer_is_never_automatically_repeated(make_system, monkeypatch):
     system=make_system()
-    job=system.post_job('Live','brief',3,client_id='near:buyer.near',simulated=False)
-    system.jobs.update(job['job_id'],payment_status='locked',client_account='buyer.near',deposit_paid_yocto=str(10**24))
+    job=system.post_job('Live','brief',3,client_id='near:buyer.testnet',simulated=False)
+    system.jobs.update(job['job_id'],payment_status='locked',client_account='buyer.testnet',deposit_paid_yocto=str(10**24))
     job=system.jobs.get(job['job_id'])
     monkeypatch.setenv('ESCROW_PRIVATE_KEY','test-key')
     def fail(*args): raise PaymentError('Unknown broadcast outcome')

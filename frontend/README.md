@@ -8,7 +8,7 @@ Build from the repository root with `./scripts/build-landing.sh` (pnpm required)
 The static Next export is copied to `static/landing-export` so FastAPI/Vercel can
 serve it without a second production server. Commit source and generated export
 together. `/` serves its index; `/landing-assets/_next/*` serves chunks; `/images/*`
-serves template images. `/login` serves the exported Privy/demo portal, `/login?method=near` retains NEAR authentication, and `/app` the
+serves template images. `/login` serves the exported Privy/demo portal, `/login?method=near` also serves the unified portal with direct NEAR wallet authentication, and `/app` the
 existing marketplace; no React client has access to provider or payment secrets.
 
 The original imported template contained an invalid type reference REVIEW_LINES;

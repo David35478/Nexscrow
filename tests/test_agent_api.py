@@ -15,10 +15,10 @@ def test_client_unconfigured_falls_back():
     assert summary == {"max_txn_usd": 25.0, "source": "config"}
 
 
-def test_client_configured_uses_key():
+def test_client_stays_off_on_testnet_even_with_key():
+    # Agent API is mainnet-only; testnet builds must never call it.
     client = AgentApiClient(api_key="test-key", base_url="https://example.invalid")
-    assert client.configured is True
-    # unreachable host -> get_policy returns None -> config fallback
+    assert client.configured is False
     summary = client.policy_summary("agent-oracle-1", {"max_txn_usd": 10.0})
     assert summary["source"] == "config"
     assert summary["max_txn_usd"] == 10.0
@@ -26,9 +26,9 @@ def test_client_configured_uses_key():
 
 def test_escrow_account_wired(make_system):
     sys_ = make_system()
-    assert sys_.constraints.escrow["account"] == "yurrri.near"
+    assert sys_.constraints.escrow["account"] == "nexscrow-escrow.testnet"
     view = sys_.public_view()
-    assert view["escrow_account"] == "yurrri.near"
+    assert view["escrow_account"] == "nexscrow-escrow.testnet"
     # catalog policy carries its source
     oracle = next(a for a in sys_.agent_catalog() if a["agent_id"] == "agent-oracle-1")
     assert oracle["policy"]["source"] == "config"
@@ -37,7 +37,7 @@ def test_escrow_account_wired(make_system):
 
 def test_quote_recipient_uses_escrow_account(make_system):
     sys_ = make_system()
-    assert sys_.constraints.escrow["account"] == "yurrri.near"
+    assert sys_.constraints.escrow["account"] == "nexscrow-escrow.testnet"
 
 
 def test_live_mode_refuses_release_without_real_payout(tmp_path, monkeypatch):

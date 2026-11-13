@@ -21,6 +21,10 @@ def main():
         failures.append('APP_ORIGIN must be a canonical HTTPS origin')
     if not (os.environ.get('DATABASE_URL') or os.environ.get('POSTGRES_URL')): failures.append('PostgreSQL is required')
     if config.demo_mode: failures.append('demo_mode must be false')
+    from src import network
+    chain = network.status(config.raw)
+    if not chain['enabled']: warnings.append('On-chain escrow disabled: ' + chain['reason'])
+    else: print('INFO NEAR network: ' + chain['label'] + ' (test tokens only)')
     if not config.kill_switch: warnings.append('Kill switch is off; keep it on until live rehearsal approval')
     if not os.environ.get('ESCROW_PRIVATE_KEY'): warnings.append('ESCROW_PRIVATE_KEY absent: no live payout/refund readiness')
     if not os.environ.get('NEAR_AI_API_KEY'): warnings.append('NEAR_AI_API_KEY absent: first-party live execution unavailable')

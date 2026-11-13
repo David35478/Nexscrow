@@ -84,11 +84,12 @@ behind a glass overlay until you enter. Three doors, one server-side session
   message-signing wallets are listed, per the docs). The backend issues a
   one-time nonce; your wallet signs it with an access key; the signature is
   Ed25519-verified and the public key is confirmed against the account on NEAR
-  mainnet RPC. No private key ever leaves your wallet.
+  Testnet RPC. Only `.testnet` (or implicit) accounts are accepted. No private
+  key ever leaves your wallet.
 - **Continue with Google (NEAR Auth)** — NEAR's social login: Auth0 Google
   sign-in, no wallet extension needed. Enabled whenever `near_auth.client_id`
-  is configured (the shared testnet client ID ships in `config.yaml`; for
-  mainnet set `NEAR_AUTH_CLIENT_ID` + `NEAR_AUTH_NETWORK=mainnet`). The token
+  is configured (the shared testnet client ID ships in `config.yaml`; only the
+  testnet NEAR Auth network is accepted). The token
   is verified server-side against the Auth0 JWKS. Kept deliberately: it is the
   only way back into sessions created through it — accounts can't be
   re-entered via wallet or demo.
@@ -201,8 +202,10 @@ Live mode moves real NEAR on-chain — no mock balances:
 
 ## Agent API (policy verification center)
 
-`src/agent_api.py` is a client for the NEAR Intents Agent API (experimental
-mainnet beta). Set `NEAR_INTENTS_AGENT_API_KEY` to activate live policy reads
+`src/agent_api.py` is a client for the NEAR Intents Agent API (a mainnet
+beta with no testnet deployment). While NEAR Testnet is active it stays off
+even when `NEAR_INTENTS_AGENT_API_KEY` is set; see `docs/testnet.md`. When an
+audited mainnet release enables it, it reads live policies
 (`GET /v1/agents/{id}/policy`): each agent card's policy footer then shows the
 owner-signed on-chain policy — actions, budgets, destination restrictions,
 freeze state — instead of the config-declared policy. Without the key, the

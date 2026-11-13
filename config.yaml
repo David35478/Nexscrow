@@ -6,21 +6,27 @@
 # local development; the product default is live.)
 demo_mode: false
 
-# NEAR escrow (real on-chain transfers, per docs.near.org).
-# Deposits: the client's wallet signs a Transfer to `account`; the backend
-# verifies the tx via RPC before locking escrow. Payouts/refunds: the escrow
-# account signs with ESCROW_PRIVATE_KEY (env) and broadcasts via send_tx.
+# NEAR network. Development defaults to testnet. In production (APP_ENV=
+# production) on-chain operations stay disabled until NEAR_NETWORK is set
+# explicitly. Only testnet is registered in src/network.py; mainnet needs an
+# audited release that adds it there. RPC: https://rpc.testnet.near.org
+near:
+  network: testnet
+
+# NEAR escrow (real testnet transfers, per docs.near.org). There is no escrow
+# smart contract: the escrow is a .testnet account you control.
+# Deposits: the client's wallet signs a Transfer to the escrow account; the
+# backend verifies the tx via testnet RPC before locking escrow.
+# Payouts/refunds: the escrow account signs with ESCROW_PRIVATE_KEY (env).
+# Set NEXSCROW_ESCROW_ACCOUNT (e.g. nexscrow-escrow.testnet) to override.
 escrow:
-  account: yurrri.near
-  rpc_url: https://rpc.mainnet.near.org
+  account: ""
   # NEAR/USD spot price used to size deposits (CoinGecko, no key required)
   price_url: https://api.coingecko.com/api/v3/simple/price
   price_ttl_seconds: 60
 
-# NEAR Intents Agent API (experimental mainnet beta; optional).
-# Activates when NEAR_INTENTS_AGENT_API_KEY is set; falls back to the
-# agent_profiles policies above otherwise. The key is read-only for agent
-# state — policy changes need the owner's signature, payouts need a grant.
+# NEAR Intents Agent API (mainnet beta, no testnet deployment). Disabled while
+# testnet is active; agent_profiles policies below are used instead.
 agent_api:
   url: https://api.agentsonintents.com
 
@@ -61,7 +67,7 @@ agent_profiles:
       - NEAR Intents ecosystem expertise
     delivers_in: "~1 minute"
     # NEAR account the escrow payout is sent to (the agent operator's wallet)
-    payout_account: david354.near
+    payout_account: ""  # .testnet account; or NEXSCROW_AGENT_PAYOUT_ACCOUNT
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -91,7 +97,7 @@ agent_profiles:
       - Escrow and payment-flow writing
     delivers_in: "~1 minute"
     # NEAR account the escrow payout is sent to (the agent operator's wallet)
-    payout_account: david354.near
+    payout_account: ""  # .testnet account; or NEXSCROW_AGENT_PAYOUT_ACCOUNT
     policy:
       max_txn_usd: 25.0
       payout_destinations: [escrow only]
@@ -120,7 +126,7 @@ agent_profiles:
       - Statistical summaries
     delivers_in: "~1 minute"
     # NEAR account the escrow payout is sent to (the agent operator's wallet)
-    payout_account: david354.near
+    payout_account: ""  # .testnet account; or NEXSCROW_AGENT_PAYOUT_ACCOUNT
     policy:
       max_txn_usd: 10.0
       payout_destinations: [escrow only]
@@ -141,13 +147,12 @@ near_ai:
 # Auth: Google OAuth (set GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET env vars)
 # and NEAR wallet connect (NEP-413 challenge).
 auth:
-  near_network: mainnet
-  near_sign_in_contract: intents.near
+  near_network: testnet
+  # Unused by the testnet wallet flow (sign-in recipient is the site host).
+  near_sign_in_contract: null
 
 # NEAR Auth (fast-auth): Google login -> MPC-derived NEAR account.
-# Testnet works out of the box with the shared demo client ID; mainnet
-# requires approved Auth0 credentials (override via NEAR_AUTH_CLIENT_ID /
-# NEAR_AUTH_NETWORK env vars).
+# Testnet only, using the shared demo client ID (override NEAR_AUTH_CLIENT_ID).
 near_auth:
   network: testnet
   client_id: np8paqIpMWmNbzT4xAvOOapZBjsOpptl

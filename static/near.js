@@ -33,14 +33,38 @@ async function getConfig() {
   return fetch("/api/config").then((r) => r.json());
 }
 
+// Only NEAR Testnet is supported; refuse to sign anything else.
+const NEAR_NETWORK_ID = "testnet";
+const TESTNET_ACCOUNT = /^((?:[a-z\d]+[-_])*[a-z\d]+(?:\.(?:[a-z\d]+[-_])*[a-z\d]+)*\.testnet|[0-9a-f]{64}|0x[0-9a-f]{40})$/;
+
+function assertTestnetAccount(accountId) {
+  if (!accountId || !TESTNET_ACCOUNT.test(String(accountId).toLowerCase())) {
+    throw new Error(
+      `${accountId || "This wallet"} is not a NEAR Testnet account. ` +
+        "Switch your wallet to Testnet (accounts ending in .testnet)."
+    );
+  }
+}
+
+function assertTestnetNetwork(networkId) {
+  if (networkId !== NEAR_NETWORK_ID) {
+    throw new Error(
+      networkId
+        ? `Refusing to sign: network '${networkId}' is not NEAR Testnet.`
+        : "On-chain payments are not enabled on this deployment."
+    );
+  }
+}
+
 /* ------------------------------------------------------ wallet login */
 
 async function loadConnector() {
   if (connector) return connector;
   const config = await getConfig();
+  assertTestnetNetwork(config.auth && config.auth.near_network);
   const { NearConnector } = await import("https://esm.sh/@hot-labs/near-connect");
   connector = new NearConnector({
-    network: config.auth.near_network || "mainnet",
+    network: NEAR_NETWORK_ID,
     // docs.near.org: only show wallets that support message signing
     features: {
       signMessage: true,
@@ -69,6 +93,7 @@ async function completeLogin(wallet) {
   try {
     const accountId = await primaryAccountOf(wallet);
     if (!accountId) throw new Error("wallet returned no account");
+    assertTestnetAccount(accountId);
     await signAndVerify(wallet, accountId, 0);
   } catch (err) {
     showErr(err);
@@ -297,6 +322,14 @@ async function payEscrow(jobId, retried) {
       return d;
     });
   const wallet = await walletOrConnect();
+  // Validate the network before every transaction: the server must have
+  // prepared a testnet deposit, and the wallet must hold a testnet account.
+  assertTestnetNetwork(prep.network_id);
+  if (wallet.getAccounts) {
+    const accounts = await wallet.getAccounts();
+    assertTestnetAccount(accounts && accounts[0] && accounts[0].accountId);
+  }
+  assertTestnetAccount(prep.receiver_id);
   // If the session is NEAR-authed, the wallet must hold that account —
   // signing from a different account would move NEAR the job can't claim.
   try {

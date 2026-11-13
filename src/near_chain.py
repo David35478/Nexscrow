@@ -23,6 +23,8 @@ from typing import Any
 
 import httpx
 
+from src.network import assert_rpc_allowed
+
 
 class NearChainError(Exception):
     pass
@@ -62,6 +64,9 @@ def _borsh_str(s: str) -> bytes:
 
 
 def rpc(method: str, params: Any, rpc_url: str) -> Any:
+    # Every chain call passes through here, so no configuration can reach a
+    # non-testnet RPC endpoint.
+    assert_rpc_allowed(rpc_url)
     try:
         resp = httpx.post(
             rpc_url,

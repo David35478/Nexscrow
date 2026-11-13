@@ -22,23 +22,21 @@ import httpx
 import jwt
 from jwt import PyJWKClient
 
+from src import network
 from src.storage import JsonStore, utcnow
 
 
 SESSION_TTL_SECONDS = 24 * 3600
 CHALLENGE_TTL_SECONDS = 15 * 60
-NEAR_RPC_URL = "https://rpc.mainnet.near.org"
+NEAR_RPC_URL = network.TESTNET.rpc_url
 NEP413_TAG = 2**31 + 413
 SESSION_COOKIE = "nexscrow_session"
 _B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 # NEAR Auth (fast-auth) Auth0 domains/audiences, from
 # @fast-auth-near/javascript-provider FAST_AUTH_AUTH0_DEFAULTS.
+# Testnet only; mainnet login is intentionally not registered.
 FAST_AUTH_NETWORKS = {
-    "mainnet": {
-        "domain": "login.auth.near.org",
-        "signing_audience": "auth0.jwt.fast-auth.near",
-    },
     "testnet": {
         "domain": "login.testnet.fast-auth.com",
         "signing_audience": "auth0.jwt.fast-auth.testnet",
@@ -290,6 +288,10 @@ class AuthService:
     ) -> dict:
         if not account_id or not public_key or not signature:
             raise AuthError("account_id, public_key and signature are required")
+        try:
+            account_id = network.validate_account(account_id, "Wallet", network.TESTNET)
+        except network.NetworkError as exc:
+            raise AuthError(f"{exc}. Switch your wallet to NEAR Testnet.") from exc
         raw_nonce = self.peek_challenge(nonce)
         if raw_nonce is None:
             raise AuthError(

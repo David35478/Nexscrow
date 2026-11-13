@@ -15,7 +15,7 @@ import os
 from src.constraints import Constraints
 from src.jobs import DepositReplayError, JobStore
 from src.ledger import Ledger
-from src import near_chain
+from src import near_chain, network
 from src.storage import utcnow
 
 
@@ -35,14 +35,37 @@ class PaymentLayer:
             return bool(job["simulated"])
         return bool(job.get("demo", self.demo))
 
+    def _network(self) -> network.NearNetwork:
+        try:
+            return network.active(self.c.raw)
+        except network.NetworkError as exc:
+            raise PaymentError(str(exc)) from exc
+
+    def _account(self, account_id: str | None, role: str) -> str:
+        try:
+            return network.validate_account(account_id, role, self._network())
+        except network.NetworkError as exc:
+            raise PaymentError(f"{exc}; funds stay in escrow") from exc
+
     def escrow_account(self) -> str:
-        account = self.c.escrow.get("account") or self.c.intents.get("escrow_account")
+        account = (
+            os.environ.get("NEXSCROW_ESCROW_ACCOUNT")
+            or self.c.escrow.get("account")
+            or self.c.intents.get("escrow_account")
+        )
         if not account:
-            raise PaymentError("escrow.account is not configured")
-        return str(account)
+            raise PaymentError("escrow account is not configured (set NEXSCROW_ESCROW_ACCOUNT)")
+        return self._account(str(account), "Escrow")
 
     def _rpc_url(self) -> str:
-        return str(self.c.escrow.get("rpc_url", "https://rpc.mainnet.near.org")).rstrip("/")
+        try:
+            return network.rpc_url(self.c.raw)
+        except network.NetworkError as exc:
+            raise PaymentError(str(exc)) from exc
+
+    def payout_account(self, agent_id: str | None) -> str | None:
+        profile = self.c.agent_profiles.get(agent_id or "", {})
+        return profile.get("payout_account") or os.environ.get("NEXSCROW_AGENT_PAYOUT_ACCOUNT") or None
 
     def _escrow_key(self) -> str | None:
         return os.environ.get("ESCROW_PRIVATE_KEY") or None
@@ -80,7 +103,9 @@ class PaymentLayer:
         amount_yocto = int(stored) if stored else near_chain.usd_to_yocto(job["reward_usd"], price)
         if not stored:
             jobs.update(job["job_id"], deposit_expected_yocto=str(amount_yocto))
+        current = self._network()
         return {
+            "network_id": current.network_id,
             "receiver_id": self.escrow_account(),
             "amount_yocto": str(amount_yocto),
             "amount_near": amount_yocto / 10**24,
@@ -108,6 +133,8 @@ class PaymentLayer:
             prepared = self.prepare_deposit(job, jobs)
             expected = prepared["amount_yocto"]
         signer = signer_id or job.get("client_account") or None
+        if signer:
+            signer = self._account(signer, "Deposit signer")
         result = near_chain.verify_deposit_tx(
             self._rpc_url(),
             tx_hash,
@@ -174,6 +201,7 @@ class PaymentLayer:
                 " access key for the escrow account); funds stay locked"
                 " in escrow until it is configured"
             )
+        receiver = self._account(receiver, "Payout receiver")
         result = near_chain.transfer_near(
             self._rpc_url(),
             self.escrow_account(),
@@ -193,13 +221,13 @@ class PaymentLayer:
             mode = "simulated"
         else:
             mode = "live"
-            profile = self.c.agent_profiles.get(job["agent"] or "", {})
-            destination = profile.get("payout_account")
+            destination = self.payout_account(job["agent"])
             if not destination:
                 raise PaymentError(
-                    f"agent '{job['agent']}' has no payout_account configured in"
-                    " agent_profiles; funds stay locked in escrow"
+                    f"agent '{job['agent']}' has no payout account (agent_profiles"
+                    " payout_account or NEXSCROW_AGENT_PAYOUT_ACCOUNT); funds stay locked in escrow"
                 )
+            destination = self._account(destination, "Agent payout")
             if not self._escrow_key():
                 raise PaymentError('ESCROW_PRIVATE_KEY is unavailable; funds stay locked')
             amount = self._payout_amount_yocto(job, payout)

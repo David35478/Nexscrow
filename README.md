@@ -263,3 +263,7 @@ payment_status (pending | locked | released | refunded), proof_hash,
 deliverable, fee_usd, agent_payout_usd, created_at, completed_at`
 
 **Proof** — `job_id, content, content_hash (sha256), submitted_at`
+
+## Production launch and admin access
+
+See [the launch checklist](docs/launch-checklist.md) for Privy wallet/Google login, Vercel environment variables, the `/admin` allowlist, and the remaining live-payment and agent-operation requirements.

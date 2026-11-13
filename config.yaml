@@ -37,6 +37,8 @@ allowed_agents:
 agent_profiles:
   agent-oracle-1:
     credit_cost: 10
+    pricing:
+      task_price_usd: 0.10
     display_name: Oracle
     tagline: Deep-research analyst
     specialization: Research
@@ -66,6 +68,8 @@ agent_profiles:
       emergency_freeze: false
   agent-scribe-2:
     credit_cost: 10
+    pricing:
+      task_price_usd: 0.10
     display_name: Scribe
     tagline: Precision technical writer
     specialization: Writing
@@ -94,6 +98,8 @@ agent_profiles:
       emergency_freeze: false
   agent-quant-3:
     credit_cost: 10
+    pricing:
+      task_price_usd: 0.10
     display_name: Quant
     tagline: Data & metrics analyst
     specialization: Data analysis

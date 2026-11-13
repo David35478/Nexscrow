@@ -71,7 +71,7 @@ class ManagementService:
         # Disabled records remain visible to administrators.
         catalog = self.system.agent_catalog(include_disabled=True)
         overrides = load_management(self.store)['agents']
-        return [{**agent, 'task_price_usd': min(agent.get('policy', {}).get('max_txn_usd') or self.system.constraints.max_job_reward_usd, self.system.constraints.max_job_reward_usd), 'payment_methods': agent.get('supported_payment_methods', ['escrow']), **overrides.get(agent['agent_id'], {}), 'enabled': overrides.get(agent['agent_id'], {}).get('enabled', True)} for agent in catalog]
+        return [{**agent, 'task_price_usd': agent.get('pricing', {}).get('task_price_usd') or min(agent.get('policy', {}).get('max_txn_usd') or self.system.constraints.max_job_reward_usd, self.system.constraints.max_job_reward_usd), 'payment_methods': agent.get('supported_payment_methods', ['escrow']), **overrides.get(agent['agent_id'], {}), 'enabled': overrides.get(agent['agent_id'], {}).get('enabled', True)} for agent in catalog]
 
     def update_agent(self, actor, agent_id, fields):
         agent = next((a for a in self.agent_records() if a['agent_id'] == agent_id), None)

@@ -51,8 +51,8 @@ def test_daily_payout_cap(make_system):
         sys_.run_demo_cycle(reward_usd=5.0)
 
     # escrow kept the money
-    stuck = [j for j in sys_.jobs.list() if j["status"] == "delivered"][0]
-    assert stuck["payment_status"] == "locked"
+    stuck = [j for j in sys_.jobs.list() if j["payment_status"] == "release_pending"][0]
+    assert stuck["payment_status"] == "release_pending"
     assert "release_blocked" in [e["event_type"] for e in sys_.ledger.events()]
 
 

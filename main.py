@@ -397,6 +397,7 @@ def create_app(
 
     @app.get('/api/customer/dashboard')
     def customer_data(request: Request):
+        system.settle_due_releases()
         return customer_service.dashboard(require_user(request))
 
     @app.get('/api/account/settings')
@@ -750,8 +751,27 @@ def create_app(
         return view
 
     @app.get("/api/jobs")
-    async def list_jobs() -> dict:
-        return system.board()
+    async def list_jobs(request: Request) -> dict:
+        board = system.board()
+        user = current_user(request)
+        uid = user["user_id"] if user else None
+
+        def view(j):
+            return system.public_job(j, owner=bool(uid and j.get("client_id") == uid))
+
+        return {k: ([view(j) for j in v] if isinstance(v, list) else v) for k, v in board.items()}
+
+    @app.post("/api/admin/escrow/settle-due")
+    async def settle_due(request: Request) -> dict:
+        require_admin(request)
+        return system.settle_due_releases()
+
+    @app.get("/api/cron/settle-due")
+    async def cron_settle_due(request: Request) -> dict:
+        secret = os.environ.get("CRON_SECRET")
+        if not secret or request.headers.get("authorization") != f"Bearer {secret}":
+            raise HTTPException(401, "cron secret required")
+        return system.settle_due_releases()
 
     @app.post("/api/jobs")
     async def create_job(body: JobCreate, request: Request) -> dict:

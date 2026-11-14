@@ -33,6 +33,7 @@
     $("#money").innerHTML = `<h2>Escrow</h2><div class="kv">
       <div><span class="k">Status</span><span class="v">${esc(job.status)}</span></div>
       <div><span class="k">Payment</span><span class="v">${esc(job.payment_status)}</span></div>
+      ${job.payment_status === "release_pending" && job.release_due_at ? `<div><span class="k">Held until</span><span class="v">${esc(new Date(job.release_due_at).toLocaleString())}</span></div>` : ""}
       <div><span class="k">Reward</span><span class="v">$${Number(job.reward_usd).toFixed(2)}</span></div>
       ${chain}
       ${job.disputed ? `<div><span class="k">Dispute</span><span class="v">${job.dispute_resolved ? "resolved" : "open"}</span></div>` : ""}</div>`;
@@ -60,7 +61,10 @@
       panel.hidden = true;
       return;
     }
-    $("#owner-hint").textContent = "Completed. If the work missed the brief, open a dispute before the window closes.";
+    $("#owner-hint").textContent = job.payment_status === "release_pending" && job.release_due_at
+      ? `Payment held until ${new Date(job.release_due_at).toLocaleString()} — dispute window. Open a dispute before then if the work missed the brief.`
+      : "Completed. The dispute window has ended and the payout is final.";
+    if (job.payment_status !== "release_pending") return;
     $("#dispute-box").hidden = false;
     const end = new Date(job.completed_at).getTime() + win * 60000;
     const tick = () => {

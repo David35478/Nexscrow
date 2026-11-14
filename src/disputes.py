@@ -21,6 +21,8 @@ def open_dispute(
         raise ConstraintError(
             f"job {job['job_id']} is '{job['status']}'; only completed jobs can be disputed"
         )
+    if job.get("payment_status") != "release_pending":
+        raise ConstraintError("funds were already paid out; this job can no longer be disputed")
     window = int(job.get("dispute_window_minutes") or 0)
     if window <= 0:
         raise ConstraintError("this job has no dispute window")
@@ -48,7 +50,7 @@ def assert_resolvable(job: dict, outcome: str) -> None:
         raise ConstraintError("this job has no open dispute")
     if job.get("dispute_resolved"):
         raise ConstraintError("this dispute is already resolved")
-    if outcome not in ("refund", "uphold"):
+    if outcome not in ("refund", "uphold", "release"):
         raise ConstraintError("outcome must be 'refund' or 'uphold'")
 
 

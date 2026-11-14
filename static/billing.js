@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
     state.checkoutEnabled = Boolean(me.checkout_enabled);
     const sub = me.subscription;
     state.subscription = sub;
+    const topup = $('buy-credits-btn');
+    topup.disabled = !sub; topup.style.opacity = sub ? '' : '0.5'; topup.style.cursor = sub ? '' : 'not-allowed';
+    $('topup-note').hidden = Boolean(sub);
     $('subscription-status').textContent = sub ? safe(sub.status || 'Active') : 'No active plan';
     $('subscription-detail').textContent = sub ? `${safe(sub.plan_name || sub.name || sub.plan_id)} · ${safe(sub.status || 'active')}` : 'Choose a plan to get a monthly call allowance and access eligible agents.';
     $('subscription-extra').textContent = sub ? `Starts ${date(sub.starts_at || sub.start_at)} · expires ${date(sub.expires_at || sub.end_at)}. Paid renewals require a new payment; no automatic crypto charges.` : 'No subscription yet';
@@ -83,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     network.addEventListener('change', update); update();
   }
   function openCheckout(kind, id) {
+    if (kind === 'topup' && !state.subscription) { status('checkout-status', 'Top-ups are available once you have an active plan.'); return; }
     if (state.uncertain) {
       status('checkout-status', 'Resolve the previous payment request using its original details before starting another.');
       if (!$('checkout-dialog').open) $('checkout-dialog').showModal();
@@ -181,8 +185,10 @@ document.addEventListener('DOMContentLoaded', () => {
           : ['underpaid', 'expired', 'refunded', 'review', 'quarantined', 'failed', 'unknown'].includes(statusKey)
             ? `Payment ${label}. Calls have not been added. Contact support if you sent funds.`
             : ['paid', 'completed', 'settled', 'success', 'succeeded'].includes(statusKey)
-              ? 'Payment verified. Call balance will reflect the completed settlement.' : `Payment ${label}; waiting for verified settlement.`;
+              ? (order.purpose === 'topup' ? 'Top-up added ✓' : 'Plan active ✓')
+              : ['deposit_detected', 'processing'].includes(statusKey) ? 'Payment detected — confirming…' : 'Waiting for your payment…';
         status('checkout-status', statusText); await loadAccount(); await loadHistory('payments');
+        if (['paid', 'completed', 'settled', 'success', 'succeeded'].includes(statusKey)) { $('plans-grid').replaceChildren(); state.plans.forEach(displayPlan); status('plan-status', statusText); }
         if (['paid', 'completed', 'settled', 'success', 'succeeded', 'failed', 'expired', 'refunded', 'underpaid', 'review', 'review_after_settlement', 'unknown', 'quarantined'].includes(label.toLowerCase())) return;
       } catch (error) { status('checkout-status', `Could not refresh payment status: ${error.message}`, true); }
       state.pollTimer = setTimeout(poll, 5000);

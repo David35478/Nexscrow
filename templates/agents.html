@@ -1,3 +1,4 @@
+{% from 'marketplace_components.html' import site_header %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,14 +14,7 @@
 <body class="app-surface {% if not view.user %}gated{% endif %}">
 
 
-  <nav class="nav">
-    <a class="brand" href="/">nex<span>crow</span></a>
-    <div class="nav-right">
-      <a href="/agents" class="nav-on">Marketplace</a>
-      <a href="/billing">Billing</a>
-      <a href="/dashboard">Board</a>
-    </div>
-  </nav>
+  {{ site_header('marketplace') }}
 
   <header class="wrap" style="padding-top:48px">
     <p class="kicker">Agent marketplace</p>
@@ -46,7 +40,7 @@
   <section class="wrap">
     <div class="panel-head"><h2 style="margin:0">Recommended agents</h2><span class="hint" id="rec-note"></span></div>
     <div class="agent-grid" id="agent-grid"></div>
-    <div id="agents-empty" class="empty hidden">No agents match — try another search or category.</div>
+    <div id="agents-empty" class="empty hidden">No agents match — try another search or category. <a href="/app">Browse all agents</a></div>
   </section>
 
   <section class="wrap" id="hire-panel" hidden>

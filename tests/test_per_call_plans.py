@@ -5,7 +5,7 @@ import pytest
 from src.billing import BillingError, BillingService
 from src.credits import CreditError, CreditService
 from src.storage import JsonStore
-from tests.test_billing import CONFIG, USER, FakeOneClick
+from tests.test_billing import CONFIG, USER, FakeOneClick, seeded
 
 
 @pytest.fixture
@@ -54,7 +54,7 @@ def test_origin_asset_must_be_usdc_or_usdt(tmp_path, monkeypatch):
     monkeypatch.setenv("BILLING_TREASURY_ADDRESS", "treasury.near")
     monkeypatch.setenv("BILLING_SETTLEMENT_ASSET", "settlement")
     client = FakeOneClick()
-    service = BillingService(JsonStore(tmp_path), copy.deepcopy(CONFIG), client)
+    service = seeded(BillingService(JsonStore(tmp_path), copy.deepcopy(CONFIG), client))
     tokens = client.tokens()
     tokens[0]["symbol"] = "ETH"
     client.tokens = lambda: tokens

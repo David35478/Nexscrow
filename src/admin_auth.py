@@ -47,8 +47,14 @@ def _hash() -> str:
     return os.environ.get('NEXSCROW_ADMIN_PASSWORD_HASH', '').strip()
 
 
+def _plain() -> str:
+    # Simpler alternative to the hash: the password itself, kept only in the
+    # host's encrypted environment settings. The hash takes precedence.
+    return os.environ.get('NEXSCROW_ADMIN_PASSWORD', '')
+
+
 def configured() -> bool:
-    return bool(_email() and _hash())
+    return bool(_email() and (_hash() or _plain()))
 
 
 def admin_user_id() -> str:
@@ -58,11 +64,19 @@ def admin_user_id() -> str:
 _DUMMY = hash_password(secrets.token_hex(8))
 
 
+def _password_ok(password: str) -> bool:
+    if _hash():
+        return verify_password(password, _hash())
+    # Compare digests so timing doesn't depend on where the strings differ.
+    verify_password(password, _DUMMY)
+    return hmac.compare_digest(hashlib.sha256((password or '').encode()).digest(),
+                               hashlib.sha256(_plain().encode()).digest())
+
+
 def authenticate(email: str, password: str) -> dict:
     if not configured():
         raise AuthError('Admin email login is not configured')
-    # Always run scrypt so a wrong email costs the same as a wrong password.
-    password_ok = verify_password(password, _hash() or _DUMMY)
+    password_ok = _password_ok(password)
     email_ok = hmac.compare_digest((email or '').strip().lower().encode(), _email().encode())
     if not (password_ok and email_ok):
         raise AuthError(GENERIC)

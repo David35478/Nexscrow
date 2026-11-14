@@ -63,7 +63,7 @@
     try {
       const {requests = []} = await api('/api/requests');
       const list = $('history-list'); list.replaceChildren();
-      if (!requests.length) { list.innerHTML = '<p class="workspace-muted">No requests yet.</p>'; return; }
+      if (!requests.length) { list.innerHTML = '<p class="workspace-muted">No tasks yet — pick an agent to start. <a class="btn btn-primary btn-sm empty-cta" href="/app">Browse agents</a></p>'; return; }
       for (const item of requests) {
         const link = document.createElement('a'); link.href = `/workspace?request=${encodeURIComponent(item.request_id)}`;
         const name = document.createElement('strong'); name.textContent = item.agent_name || item.agent_id || 'Agent request';
@@ -72,8 +72,30 @@
       }
     } catch (e) { $('history-list').textContent = `Could not load request history: ${e.message}`; }
   }
+  function renderTracker(record, state) {
+    const credits = record.payment_method === 'credits';
+    const labels = [credits ? 'Plan call' : 'Funded', 'Working', 'Delivered', 'Approved'];
+    const approved = record.approved || record.payment_status === 'released' || (credits && state === 'completed');
+    let idx = 0, bad = '';
+    if (state === 'failed' || state === 'cancelled') { bad = state === 'failed' ? 'Failed' : 'Cancelled'; idx = record.job_id && state === 'failed' ? 1 : 0; }
+    else if (approved || state === 'completed' && !credits) idx = 3;
+    else if (state === 'delivered') idx = 2;
+    else if (state === 'awaiting_funding') idx = -1;
+    else if (advanceStatuses.has(state)) idx = 1;
+    const ol = $('step-tracker'); ol.replaceChildren();
+    labels.forEach((label, i) => {
+      const li = document.createElement('li'); li.textContent = label;
+      if (i < idx || (i === idx && idx === 3)) li.className = 'done';
+      if (i === idx) { if (bad) { li.className = 'bad'; li.textContent = `${label} — ${bad}`; } else li.setAttribute('aria-current', 'step'); }
+      if (idx === -1 && i === 0) li.setAttribute('aria-current', 'step');
+      ol.append(li);
+    });
+    const proof = $('proof-link');
+    proof.hidden = !record.job_id; if (record.job_id) proof.href = `/job/${encodeURIComponent(record.job_id)}`;
+  }
   function showRecord(record) {
     active = record;
+    renderTracker(record, String(record.status || '').toLowerCase());
     $('execution-empty').hidden = true; $('execution-detail').hidden = false;
     $('execution-title').textContent = record.agent_name || record.agent_id || 'Agent request';
     $('request-status').textContent = labelStatus(record.status);

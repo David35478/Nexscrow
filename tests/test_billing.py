@@ -49,12 +49,24 @@ class FakeOneClick:
 
 
 @pytest.fixture
-def service(tmp_path, monkeypatch):
+def bare(tmp_path, monkeypatch):
     store = JsonStore(tmp_path / 'billing')
     monkeypatch.setattr('src.billing.PostgresStore', JsonStore)
     monkeypatch.setenv('BILLING_TREASURY_ADDRESS', 'treasury.near')
     monkeypatch.setenv('BILLING_SETTLEMENT_ASSET', 'settlement')
     return BillingService(store, copy.deepcopy(CONFIG), FakeOneClick())
+
+
+@pytest.fixture
+def service(bare):
+    return seeded(bare)
+
+
+def seeded(service, user=USER):
+    # Top-ups need an active plan; seed one without granting calls.
+    offer = service._offer('subscription', 'starter')
+    service._update(lambda data: service._activate(data, user['user_id'], offer, 'seed', datetime.now(timezone.utc), allocate_credits=False))
+    return service
 
 
 def create(service, key='purchase-1', purpose='topup', offer='small'):
@@ -154,7 +166,8 @@ def test_owner_and_idempotency_conflict(service):
         service.create(USER, 'subscription', 'starter', 'input', 'refund-on-origin', 'purchase-1')
 
 
-def test_subscription_activation_manual_renewal_upgrade_and_downgrade(service):
+def test_subscription_activation_manual_renewal_upgrade_and_downgrade(bare):
+    service = bare
     order = create(service, 'starter-1', 'subscription', 'starter')
     assert not service.credits.entitlement(USER['user_id'], 'agent-any')['allowed']
     service.client.success(order)
@@ -195,7 +208,8 @@ def test_api_never_accepts_frontend_prices_and_stays_off_by_default(tmp_path):
     assert client.post('/api/subscription/checkout', json={'plan_id': 'starter', 'origin_asset': 'input', 'refund_address': 'refund', 'idempotency_key': 'test-key-1'}).status_code == 400
 
 
-def test_free_enrollment_is_single_grant_and_expiry_keeps_topups(service):
+def test_free_enrollment_is_single_grant_and_expiry_keeps_topups(bare):
+    service = bare
     result = service.free(USER)
     assert result['balance'] == 20
     assert service.free(USER)['balance'] == 20
@@ -242,7 +256,8 @@ def test_subscription_rollover_policy_is_explicit(service):
     assert bucket['expires_at'] is None
 
 
-def test_refund_reported_after_success_freezes_for_review_without_silent_removal(service):
+def test_refund_reported_after_success_freezes_for_review_without_silent_removal(bare):
+    service = bare
     order = create(service, purpose='subscription', offer='starter')
     service.client.success(order)
     assert service.status(USER, order['payment_id'])['status'] == 'paid'
@@ -255,7 +270,8 @@ def test_refund_reported_after_success_freezes_for_review_without_silent_removal
         service.credits.reserve(USER['user_id'], 'agent', 'new-request', 1)
 
 
-def test_free_downgrade_does_not_repeat_a_used_free_grant(service):
+def test_free_downgrade_does_not_repeat_a_used_free_grant(bare):
+    service = bare
     service.free(USER)
     upgrade = create(service, 'upgrade-after-free', 'subscription', 'starter')
     service.client.success(upgrade)

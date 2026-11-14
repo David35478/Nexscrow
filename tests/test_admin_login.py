@@ -50,6 +50,7 @@ def test_failures_are_generic(tmp_path, monkeypatch):
 def test_unconfigured_rejected(tmp_path, monkeypatch):
     monkeypatch.delenv('NEXSCROW_ADMIN_EMAIL', raising=False)
     monkeypatch.delenv('NEXSCROW_ADMIN_PASSWORD_HASH', raising=False)
+    monkeypatch.delenv('NEXSCROW_ADMIN_PASSWORD', raising=False)
     app, client = build(tmp_path, monkeypatch, configured=False)
     response = login(client)
     assert response.status_code == 400
@@ -67,3 +68,21 @@ def test_pages_and_other_sessions(tmp_path, monkeypatch):
     forged = TestClient(app)
     forged.cookies.set(SESSION_COOKIE, app.state.auth.create_session('admin', 'admin:evil@example.com', 'Admin'))
     assert forged.get('/api/admin/overview').status_code == 403
+
+
+def test_plain_password_setting(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from main import create_app
+    from tests.conftest import make_config
+    monkeypatch.delenv('NEXSCROW_ADMIN_PASSWORD_HASH', raising=False)
+    monkeypatch.setenv('NEXSCROW_ADMIN_EMAIL', 'Owner@Example.com')
+    monkeypatch.setenv('NEXSCROW_ADMIN_PASSWORD', 'plain-setting-pass')
+    c = TestClient(create_app(config_path=make_config(tmp_path), data_dir=str(tmp_path / 'data')))
+    bad = c.post('/api/auth/admin/login', json={'email': 'owner@example.com', 'password': 'nope'})
+    assert bad.status_code == 400 and bad.json()['error'] == 'Invalid email or password'
+    ok = c.post('/api/auth/admin/login', json={'email': 'owner@example.com', 'password': 'plain-setting-pass'})
+    assert ok.status_code == 200
+    assert c.get('/api/admin/overview').status_code == 200
+    # The hash wins when both are set.
+    monkeypatch.setenv('NEXSCROW_ADMIN_PASSWORD_HASH', admin_auth.hash_password('hash-wins-pass'))
+    assert c.post('/api/auth/admin/login', json={'email': 'owner@example.com', 'password': 'plain-setting-pass'}).status_code == 400

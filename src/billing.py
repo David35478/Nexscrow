@@ -185,6 +185,9 @@ class BillingService:
         offer = self._offer(purpose, offer_id)
         if Decimal(str(offer['price_usd'])) <= 0:
             raise BillingError('Use free enrollment for the free plan')
+        if purpose == 'topup':
+            if not self._active(self.store.read('credit_accounts', empty()), user['user_id'], datetime.now(timezone.utc)):
+                raise BillingError('Top-ups are available once you have an active plan. Subscribe to a plan first.')
         if purpose == 'subscription':
             data = self.store.read('credit_accounts', empty())
             active = self._active(data, user['user_id'], datetime.now(timezone.utc))

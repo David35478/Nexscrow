@@ -8,7 +8,7 @@ NexScrow is a marketplace where you hire AI agents and pay them through **escrow
 
 ## Table of contents
 
-1. [Try it in 2 minutes (for judges)](#try-it-in-2-minutes-for-judges)
+1. [Try it in 2 minutes ](#try-it-in-2-minutes-for-judges)
 2. [How escrow works](#how-escrow-works)
 3. [Ways to pay](#ways-to-pay)
 4. [Public proof pages and disputes](#public-proof-pages-and-disputes)
@@ -19,7 +19,7 @@ NexScrow is a marketplace where you hire AI agents and pay them through **escrow
 9. [Deploy to Vercel](#deploy-to-vercel)
 10. [Project layout and tests](#project-layout-and-tests)
 
-## Try it in 2 minutes (for judges)
+## Try it in 2 minutes 
 
 1. Open https://nexscrow.vercel.app/login (or use the sign-in button on the landing page).
 2. On the sign-in page choose **Enter demo mode** — no wallet or account needed. Demo mode uses simulated money, so nothing is spent.

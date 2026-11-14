@@ -1,0 +1,164 @@
+/* Glass theme: pastel blue/purple, frosted panels, soft layered depth.
+   Loaded after app-theme.css on every app page and overrides its surface rules. */
+:root {
+  --g-ink: #1d2340;
+  --g-muted: #5b6386;
+  --g-line: rgba(255, 255, 255, .7);
+  --g-glass: rgba(255, 255, 255, .55);
+  --g-glass-strong: rgba(255, 255, 255, .72);
+  --g-blue: #3d6bff;
+  --g-blue-dark: #2b54e0;
+  --g-violet: #8b6cff;
+  --g-shadow: 0 10px 30px -12px rgba(61, 70, 160, .22), 0 2px 6px -2px rgba(61, 70, 160, .08);
+  --g-radius: 20px;
+}
+
+body.app-surface {
+  --app-paper: transparent;
+  --app-white: var(--g-glass-strong);
+  --app-ink: var(--g-ink);
+  --app-muted: var(--g-muted);
+  --app-line: rgba(160, 170, 220, .32);
+  --app-moss: var(--g-blue);
+  --app-moss-dark: var(--g-blue-dark);
+  --app-soft: rgba(255, 255, 255, .6);
+  color: var(--g-ink);
+  background:
+    radial-gradient(900px 600px at 8% -5%, #cfe0ff 0%, transparent 60%),
+    radial-gradient(800px 600px at 100% 10%, #e3d7ff 0%, transparent 55%),
+    radial-gradient(900px 700px at 50% 110%, #d6e9ff 0%, transparent 60%),
+    linear-gradient(160deg, #eef3ff 0%, #f1ecff 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+/* Soft light orbs for depth; behind content, never intercept clicks. */
+body.app-surface::before,
+body.app-surface::after {
+  content: ""; position: fixed; z-index: -1; pointer-events: none; border-radius: 50%; filter: blur(60px); opacity: .55;
+}
+body.app-surface::before { width: 420px; height: 420px; left: -120px; top: 30%; background: #b9ccff; }
+body.app-surface::after { width: 380px; height: 380px; right: -100px; bottom: -80px; background: #d4c2ff; }
+body.app-surface ::selection { background: #d6dcff; color: var(--g-ink); }
+body.app-surface :focus-visible { outline: 2px solid var(--g-blue); outline-offset: 3px; }
+
+/* Header: a floating frosted bar. */
+body.app-surface .site-header,
+body.app-surface .nav {
+  position: sticky; top: 12px; z-index: 50;
+  width: min(1200px, calc(100% - 32px)); margin: 12px auto 28px;
+  background: var(--g-glass); border: 1px solid var(--g-line); border-radius: 18px;
+  backdrop-filter: blur(22px) saturate(160%); -webkit-backdrop-filter: blur(22px) saturate(160%);
+  box-shadow: var(--g-shadow);
+}
+body.app-surface .brand { color: var(--g-ink); }
+body.app-surface .brand-dot { background: linear-gradient(135deg, var(--g-blue), var(--g-violet)); box-shadow: 0 0 0 4px rgba(61, 107, 255, .14); }
+body.app-surface .main-nav a,
+body.app-surface .nav a:not(.brand) {
+  border: 0; background: transparent; color: var(--g-muted); font-size: 14px; letter-spacing: 0; border-radius: 0; padding: 8px 4px;
+  position: relative;
+}
+body.app-surface .main-nav a:hover { color: var(--g-ink); background: transparent; }
+body.app-surface .main-nav a.active,
+body.app-surface .main-nav a[aria-current="page"] { color: var(--g-blue); background: transparent; border: 0; font-weight: 600; }
+body.app-surface .main-nav a[aria-current="page"]::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -2px; height: 2px; border-radius: 2px; background: var(--g-blue);
+}
+body.app-surface .user-pill,
+body.app-surface .testnet-badge {
+  background: rgba(255, 255, 255, .7); border: 1px solid var(--g-line); border-radius: 999px; color: var(--g-muted);
+}
+body.app-surface .testnet-badge { color: #6b4fe0; background: rgba(139, 108, 255, .12); border-color: rgba(139, 108, 255, .25); }
+
+/* Frosted panels and cards. */
+body.app-surface :is(.panel, .dashboard-card, .workspace-card, .agent-card, .discovery-card, .metric-card,
+  .plan-card, .subscription-card, .balance-card, .purchase-panel, .payment-option, .portal-card, .gate-card,
+  .detail-section, .agent-profile, .bento, .bento-card, .admin-login-card, .agent-match-card, .stack-card,
+  .request-list, .table-wrap, .history-table-wrap, .why, .lb-row, .result) {
+  background: var(--g-glass); border: 1px solid var(--g-line); border-radius: var(--g-radius);
+  backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%);
+  box-shadow: var(--g-shadow); color: var(--g-ink);
+}
+body.app-surface :is(.agent-card, .discovery-card, .plan-card, .portal-card, .metric-card) {
+  transition: transform .25s ease, box-shadow .25s ease, background .25s ease;
+}
+body.app-surface :is(.agent-card, .discovery-card, .plan-card, .portal-card):hover {
+  transform: translateY(-3px); background: var(--g-glass-strong);
+  box-shadow: 0 18px 40px -16px rgba(61, 70, 160, .3), 0 2px 8px -2px rgba(61, 70, 160, .1);
+}
+/* Hero-style first heading block gets the gradient banner treatment from the reference. */
+body.app-surface :is(.workspace-heading, .customer-heading, .billing-heading, .management-heading, .section-heading, .page-title) {
+  position: relative; overflow: hidden; padding: 28px 32px; border-radius: 24px; border: 1px solid var(--g-line);
+  background:
+    radial-gradient(420px 220px at 95% 0%, rgba(139, 108, 255, .35), transparent 70%),
+    linear-gradient(110deg, rgba(210, 226, 255, .85) 0%, rgba(232, 246, 228, .7) 45%, rgba(226, 214, 255, .85) 100%);
+  box-shadow: var(--g-shadow);
+}
+body.app-surface :is(h1, h2, h3) { color: var(--g-ink); letter-spacing: -.02em; }
+body.app-surface :is(.eyebrow, .section-kicker, .kicker, .hero-eyebrow) { color: var(--g-violet); letter-spacing: .08em; }
+body.app-surface :is(.muted, .sub, .lede, .hint, small) { color: var(--g-muted); }
+
+/* Buttons: blue pill primary, glass outline secondary. */
+body.app-surface :is(.btn-primary, .btn.primary, .btn-dark, .workspace-submit, button[type="submit"].btn) {
+  background: linear-gradient(135deg, var(--g-blue), #5a7dff); color: #fff; border: 0; border-radius: 999px;
+  box-shadow: 0 8px 18px -8px rgba(61, 107, 255, .6);
+}
+body.app-surface :is(.btn-primary, .btn.primary, .btn-dark, .workspace-submit):hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--g-blue-dark), var(--g-blue)); color: #fff;
+}
+body.app-surface :is(.btn-secondary, .btn-ghost, .btn-light, .btn.ghost, .text-button.btn) {
+  background: rgba(255, 255, 255, .7); color: var(--g-ink); border: 1px solid rgba(29, 35, 64, .18); border-radius: 999px;
+}
+body.app-surface :is(.btn-secondary, .btn-ghost, .btn-light):hover:not(:disabled) { background: #fff; border-color: rgba(61, 107, 255, .4); }
+body.app-surface .btn:disabled, body.app-surface button:disabled { opacity: .5; box-shadow: none; }
+
+/* Inputs: soft glass fields. */
+body.app-surface :is(input:not([type="radio"]):not([type="checkbox"]), textarea, select) {
+  background: rgba(255, 255, 255, .75); border: 1px solid rgba(140, 150, 210, .35); border-radius: 12px; color: var(--g-ink);
+}
+body.app-surface :is(input, textarea, select):focus { border-color: var(--g-blue); box-shadow: 0 0 0 4px rgba(61, 107, 255, .14); outline: none; }
+body.app-surface input[type="radio"], body.app-surface input[type="checkbox"] { accent-color: var(--g-blue); }
+
+/* Chips, tabs, pills and status dots. */
+body.app-surface :is(.chip, .cat, .tag-pill, .agent-category, .status-pill, .status-badge, .verified-badge, .secure-pill) {
+  background: rgba(255, 255, 255, .7); border: 1px solid var(--g-line); border-radius: 999px; color: var(--g-muted);
+}
+body.app-surface :is(.cat.on, .chip.on, .dashboard-tabs [aria-selected="true"], .portal-tabs [aria-selected="true"], .history-tabs [aria-selected="true"]) {
+  background: var(--g-blue); color: #fff; border-color: transparent;
+}
+body.app-surface .agent-monogram, body.app-surface .agent-avatar, body.app-surface .payment-icon {
+  background: linear-gradient(135deg, #2a2f5a, #4b3a8f); color: #fff; border-radius: 10px;
+}
+body.app-surface table { border-collapse: separate; border-spacing: 0; }
+body.app-surface :is(th, td) { border-color: rgba(160, 170, 220, .25); }
+body.app-surface :is(.dashboard-notice, .billing-notice, .workspace-alert, .toast) {
+  background: rgba(255, 255, 255, .78); border: 1px solid rgba(139, 108, 255, .25); border-radius: 14px;
+  backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+}
+body.app-surface :is(.footer, .marketplace-footer) { color: var(--g-muted); background: transparent; border-color: rgba(160, 170, 220, .25); }
+
+/* Step tracker (tasks) in the reference's blue accent. */
+body.app-surface .request-steps li[aria-current="step"],
+body.app-surface [class*="tracker"] li[aria-current="step"] { color: var(--g-blue); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  body.app-surface * { transition: none !important; }
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  body.app-surface :is(.panel, .dashboard-card, .workspace-card, .agent-card, .site-header) { background: rgba(255, 255, 255, .9); }
+}
+
+/* Retire the old moss/green accents and mono nav type in favour of the blue/violet palette. */
+body.app-surface {
+  --green: var(--g-blue); --green-dark: var(--g-blue-dark); --green-soft: rgba(61, 107, 255, .1);
+  --accent: var(--g-blue); --accent-deep: var(--g-blue-dark); --ink: var(--g-ink); --muted: var(--g-muted);
+  font-family: "Inter", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+}
+body.app-surface :is(.main-nav a, .nav-actions .btn, .user-pill, .testnet-badge) { font-family: inherit; letter-spacing: 0; text-transform: none; }
+body.app-surface .brand { font-family: inherit; text-transform: none; letter-spacing: -.02em; font-size: 17px; font-weight: 700; }
+body.app-surface .site-header .nav-inner { width: 100%; max-width: none; padding: 0 22px; }
+body.app-surface h1 :is(span, em, strong),
+body.app-surface .hero-title span {
+  background: linear-gradient(100deg, var(--g-blue), var(--g-violet)); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+body.app-surface main a:not(.btn):not(.agent-card):not(.discovery-card):not(.portal-card) { color: var(--g-blue); }
+body.app-surface .admin-login-card :is(button, .btn) { background: linear-gradient(135deg, var(--g-blue), #5a7dff); color: #fff; border: 0; border-radius: 999px; }

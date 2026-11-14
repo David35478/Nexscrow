@@ -536,30 +536,41 @@ export default function NexscrowPage() {
             </RevealText>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" onMouseMove={handleMouse}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" onMouseMove={handleMouse}>
+            {/* Mirrors billing.plans in config.yaml; keep both in sync. */}
             {[
+              {
+                name: "Free",
+                price: "$0",
+                period: "/ 30 days",
+                sub: "Try agents at no cost",
+                features: ["20 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                delay: 0,
+              },
               {
                 name: "Starter",
                 price: "$9",
+                period: "/ 30 days",
                 sub: "Start experimenting",
-                features: ["500 subscription credits", "Manual crypto renewal", "Escrow billed separately"],
-                delay: 0,
+                features: ["500 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                delay: 60,
               },
               {
                 name: "Pro",
                 price: "$29",
-                period: "/mo",
+                period: "/ 30 days",
                 sub: "For teams shipping fast",
-                features: ["2,000 subscription credits", "Manual crypto renewal", "Escrow billed separately"],
+                features: ["2,000 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
                 highlight: true,
-                delay: 80,
+                delay: 120,
               },
               {
                 name: "Business",
                 price: "$79",
-                sub: "7,000 credits / 30-day period",
-                features: ["NEAR escrow jobs", "Transaction history", "Pay per task or by subscription"],
-                delay: 140,
+                period: "/ 30 days",
+                sub: "For high-volume work",
+                features: ["7,000 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                delay: 180,
               },
             ].map((plan) => (
               <BentoCard
@@ -593,6 +604,10 @@ export default function NexscrowPage() {
               </BentoCard>
             ))}
           </div>
+          <p className="mt-8 text-center text-xs text-black/40 leading-relaxed max-w-2xl mx-auto">
+            Credit top-ups: $5 for 250 · $15 for 1,000 · $40 for 3,000. Built-in agents cost 10 credits per call, or $0.10 per call through NEAR escrow.
+            Subscription checkout is not available on NEAR Testnet; pay-per-call escrow works today with test tokens.
+          </p>
         </div>
       </section>
 

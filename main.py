@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse
 from src.billing import BillingService, BillingError
 from src.intents import IntentsError
 from src.customer import CustomerService
+from src.deals import DealService, DealError
 from src.management import ManagementService, ManagementError, is_admin
 
 
@@ -230,10 +231,22 @@ def create_app(
     app.state.system = system
     @app.middleware('http')
     async def app_entry_portal(request: Request, call_next):
-        private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer'}
-        is_app_page = request.method == 'GET' and (request.url.path in private_pages or request.url.path.startswith('/agents/'))
-        if is_app_page and not app.state.auth.get_user(request.cookies.get(SESSION_COOKIE)):
-            return RedirectResponse('/login', status_code=303)
+        private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer', '/deals'}
+        path = request.url.path
+        is_app_page = request.method == 'GET' and (path in private_pages or path.startswith(('/agents/', '/deals/')))
+        signed_in = is_app_page and app.state.auth.get_user(request.cookies.get(SESSION_COOKIE))
+        if is_app_page and not signed_in:
+            response = RedirectResponse('/login', status_code=303)
+            if path.startswith('/deals/'):
+                # Every sign-in method lands on /app; return invitees to their deal link afterwards.
+                target = path + ('?' + request.url.query if request.url.query else '')
+                response.set_cookie('nx_next', target, max_age=900, httponly=True, samesite='lax', secure=request.url.scheme == 'https')
+            return response
+        next_path = request.cookies.get('nx_next', '')
+        if signed_in and path == '/app' and next_path.startswith('/deals/'):
+            response = RedirectResponse(next_path, status_code=303)
+            response.delete_cookie('nx_next')
+            return response
         return await call_next(request)
     from src.security import install_security
     install_security(app, system.store)
@@ -390,6 +403,78 @@ def create_app(
         if os.environ.get('APP_ENV') == 'production' and not configured:
             raise HTTPException(503, 'Production origin is not configured')
         return configured.rstrip('/') if configured else f"{proto}://{host}"
+
+    # ---- person-to-person escrow (side feature) ----
+    deal_service = DealService(system.store)
+
+    def _deal_call(fn, *args):
+        try:
+            return fn(*args)
+        except DealError as exc:
+            raise HTTPException(exc.status, str(exc))
+
+    async def _json_body(request: Request) -> dict:
+        try:
+            body = await request.json()
+        except Exception:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    @app.post('/api/deals')
+    async def deals_create(request: Request):
+        user = require_user(request)
+        body = await _json_body(request)
+        return _deal_call(deal_service.create, user, body.get('title'), body.get('description', ''), body.get('amount_usd'), body.get('seller_account'))
+
+    @app.get('/api/deals')
+    def deals_list(request: Request):
+        return {'deals': deal_service.list_for(require_user(request))}
+
+    @app.get('/api/deals/{deal_id}')
+    def deals_get(deal_id: str, request: Request):
+        return _deal_call(deal_service.get, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/join')
+    async def deals_join(deal_id: str, request: Request):
+        user = require_user(request)
+        token = (await _json_body(request)).get('token')
+        return _deal_call(deal_service.join, user, deal_id, token if isinstance(token, str) else '')
+
+    @app.post('/api/deals/{deal_id}/fund')
+    def deals_fund(deal_id: str, request: Request):
+        return _deal_call(deal_service.fund, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/confirm')
+    def deals_confirm(deal_id: str, request: Request):
+        return _deal_call(deal_service.confirm, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/cancel')
+    def deals_cancel(deal_id: str, request: Request):
+        return _deal_call(deal_service.cancel, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/dispute')
+    async def deals_dispute(deal_id: str, request: Request):
+        user = require_user(request)
+        reason = (await _json_body(request)).get('reason', '')
+        return _deal_call(deal_service.dispute, user, deal_id, reason if isinstance(reason, str) else '')
+
+    @app.post('/api/admin/deals/{deal_id}/resolve')
+    async def deals_resolve(deal_id: str, request: Request):
+        require_admin(request)
+        return _deal_call(deal_service.resolve, deal_id, (await _json_body(request)).get('outcome'))
+
+    @app.get('/deals')
+    async def deals_page(request: Request):
+        return templates.TemplateResponse(request=request, name='deals.html', context={'user': current_user(request)})
+
+    @app.get('/deals/{deal_id}')
+    async def deal_detail_page(deal_id: str, request: Request, token: str | None = None):
+        user = current_user(request)
+        if not user:
+            return RedirectResponse('/login', status_code=303)
+        if not deal_service.peek(user, deal_id, token):
+            raise HTTPException(404, 'deal not found')
+        return templates.TemplateResponse(request=request, name='deal_detail.html', context={'user': user, 'deal_id': deal_id, 'token': token or ''})
 
     @app.get('/account')
     async def customer_dashboard(request: Request):

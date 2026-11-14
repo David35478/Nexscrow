@@ -229,3 +229,9 @@ Run the tests with:
 ```
 
 API documentation is served at `/api/docs` while the app is running.
+
+## Person-to-person escrow (side feature)
+
+A small side feature next to the agent marketplace, linked from `/account` ("Pay a person with escrow"). A buyer creates a deal (title, description, 1–10,000 USD) at `/deals` and shares the invite link with the seller, who joins while signed in. Flow: pay → held in escrow → buyer and seller both confirm delivery → released. Either party can cancel before funding; after funding either can open a dispute, which an admin resolves via `POST /api/admin/deals/{id}/resolve` (`{"outcome": "refund"|"release"}`). There is no fee.
+
+Currently only demo-session users (simulated money) can use deals; live accounts get a 400 "Live person-to-person escrow is coming soon". Code: `src/deals.py`, routes under `/api/deals` in `main.py`.

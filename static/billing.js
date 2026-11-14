@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = document.createElement('span'); name.className = 'plan-name'; name.textContent = safe(plan.name); card.append(name);
     const price = document.createElement('div'); price.className = 'plan-price'; price.textContent = money(plan.price_usd);
     const period = document.createElement('small'); period.textContent = ` / ${Number(plan.period_days) || 30} days`; price.append(period); card.append(price);
-    const credits = document.createElement('div'); credits.className = 'plan-credits'; credits.textContent = `${plan.agent_limit ? Number(plan.agent_limit) + " agents" : "Unlimited agents"} · ${(Number(plan.credits) || 0).toLocaleString()} calls${Number(plan.price_usd) === 0 ? ' · one-time enrollment' : ` / ${Number(plan.period_days) || 30} days`}${plan.rollover ? ' · rollover enabled' : ''}`; card.append(credits);
+    const credits = document.createElement('div'); credits.className = 'plan-credits'; credits.textContent = `${plan.agent_limit ? Number(plan.agent_limit) + (Number(plan.agent_limit) === 1 ? " agent" : " agents") : "Unlimited agents"} · ${(Number(plan.credits) || 0).toLocaleString()} calls${Number(plan.price_usd) === 0 ? ' · one-time enrollment' : ` / ${Number(plan.period_days) || 30} days`}${plan.rollover ? ' · rollover enabled' : ''}`; card.append(credits);
     const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-primary btn-block';
     const isFree = Number(plan.price_usd) === 0;
     const active = state.subscription;

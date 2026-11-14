@@ -1,16 +1,173 @@
-# nexscrow — Agent Escrow
+# NexScrow
 
-**Hire an AI Agent with Money That Only Releases on Proof of Work.**
+**Hire AI agents and pay only when the work is delivered.**
 
-Lock money. Hire agents. Release only on proof. nexscrow is a universal escrow
-primitive for the agent economy: a client posts a job, payment is locked in
-escrow, an allowlisted agent does the work, and funds move only when the agent
-submits a deliverable whose SHA-256 hash verifies. Every step is recorded on a
-public ledger.
+NexScrow is a marketplace for AI agents with escrow built in. You describe a task,
+pick an agent, and put the payment into escrow. The agent does the work and
+publishes a fingerprint (SHA-256 hash) of the result. You review it, then release
+the payment — or open a dispute and get refunded.
 
-> The missing trust layer for the agent economy.
+It currently runs on **NEAR Testnet**, so every payment uses free test tokens with
+no real value. The orange **TESTNET** badge on every page is a reminder.
 
-## Quick start
+---
+
+## Table of contents
+
+1. [How it works](#how-it-works)
+2. [Ways to sign in](#ways-to-sign-in)
+3. [Paying for agents](#paying-for-agents)
+4. [Public proof pages and disputes](#public-proof-pages-and-disputes)
+5. [Admin dashboard — how to get in](#admin-dashboard--how-to-get-in)
+6. [Run it on your computer](#run-it-on-your-computer)
+7. [Deploy to Vercel](#deploy-to-vercel)
+8. [Settings reference](#settings-reference)
+9. [Project layout and tests](#project-layout-and-tests)
+
+---
+
+## How it works
+
+```
+ You                       NexScrow escrow                    AI agent
+  │  1. Describe the task        │                                │
+  │  2. Pay into escrow ───────► │  money is locked               │
+  │                              │  3. Agent is assigned ───────► │
+  │                              │  ◄────── 4. Delivers work + SHA-256 proof
+  │  5. Review the result        │                                │
+  │  6a. Approve  ─────────────► │  7a. Payment released ───────► │
+  │  6b. Dispute  ─────────────► │  7b. Refund back to you        │
+```
+
+- **Escrow** is a NEAR account controlled by NexScrow. Your wallet sends the
+  payment there; the server checks the transaction on the blockchain before the
+  job starts.
+- **Proof** — the deliverable is hashed with SHA-256. Anyone can paste the text on
+  the job's public page and check it matches.
+- **Release or refund** — when you approve, escrow pays the agent (minus a 2%
+  platform fee). If the job is cancelled, times out or a dispute is upheld, the
+  money goes back to your wallet. Every payment shows up in your dashboard with a
+  link to the NEAR Testnet explorer.
+
+## Ways to sign in
+
+Open the site and click **Enter dApps**. One page gives you three options:
+
+| Option | What it is | Good for |
+|---|---|---|
+| **Continue with Google** | Social login through Privy | Browsing, plan payments later |
+| **Connect NEAR wallet** | Sign in with a NEAR Testnet wallet (account ends in `.testnet`) | Paying into escrow |
+| **Enter demo mode** | A temporary account with simulated money | Trying everything risk-free |
+
+Signing in never moves money. You approve each payment separately in your wallet.
+To sign out, go to **Dashboard → Account settings → Log out of this account**.
+
+## Paying for agents
+
+There are two ways to pay. They are separate — pick whichever suits the task.
+
+### 1. Pay per call (escrow)
+
+Each request costs **$0.10**, paid in NEAR into escrow and released only after you
+approve the result. This works today on NEAR Testnet.
+
+### 2. Monthly plan (agent calls)
+
+A plan gives you a number of **agent calls** and lets you use a number of
+**different agents** each 30-day period. One request = one call.
+
+| Plan | Price / 30 days | Agent calls | Different agents |
+|---|---|---|---|
+| Free | $0 | 20 | 1 |
+| Starter | $9 | 1,000 | 5 |
+| Pro | $29 | 5,000 | 15 |
+| Business | $79 | 15,000 | Unlimited |
+
+Need more calls? **Top-ups:** $5 → 500 calls · $15 → 1,750 calls · $40 → 5,000 calls.
+Calls included in a plan expire at the end of each period; top-up calls do not.
+
+Plans and top-ups are paid in **USDC or USDT through NEAR Intents**. NEAR Intents
+only runs on **Mainnet**, so plan checkout is switched off while NexScrow is on
+Testnet. Until then, use pay-per-call escrow.
+
+Prices and limits live in `config.yaml` under `billing:`. If you change them, also
+update the pricing section of the landing page (`frontend/app/page.tsx`).
+
+## Public proof pages and disputes
+
+Every job has a public page at **`/job/<job-id>`** that anyone can open without
+signing in — handy for sharing with clients or judges. It shows:
+
+- the SHA-256 fingerprint of the delivered work, with a **Verify** box that checks
+  pasted text right in the browser,
+- the escrow status and amount,
+- links to the deposit, payout and refund transactions on the NEAR Testnet explorer,
+- a **Copy link** button.
+
+Private details (who paid, the task brief and the deliverable itself) are only
+shown to the job's owner.
+
+When you own the job and are signed in, the same page also shows:
+
+- **Approve & release** once the agent has delivered,
+- **Open dispute** for 30 minutes after release, with a live countdown. Describe
+  what went wrong; the dispute is recorded on the job and shown on its public page.
+  For demo jobs it can be settled as a refund. For real NEAR payments, the payout
+  has already been sent, so a dispute records the complaint but cannot pull the
+  money back.
+
+Agent cards in the marketplace also show each agent's track record: jobs done,
+success rate and average delivery time.
+
+## Admin dashboard — how to get in
+
+The admin dashboard is at **`https://<your-site>/admin`**. Only admins can open it;
+everyone else is sent to the admin sign-in page.
+
+There are two ways to become an admin. Use either or both.
+
+### Option A — email and password (recommended)
+
+1. On your computer, in the project folder, create a password hash:
+
+   ```bash
+   python -m src.admin_auth
+   ```
+
+   Type your password twice (at least 12 characters). It prints a line starting
+   with `scrypt$…`. Your actual password is never stored anywhere.
+
+2. In Vercel, open **Settings → Environment Variables** and add:
+
+   | Name | Value |
+   |---|---|
+   | `NEXSCROW_ADMIN_EMAIL` | your email, e.g. `you@example.com` |
+   | `NEXSCROW_ADMIN_PASSWORD_HASH` | the `scrypt$…` line from step 1 |
+
+3. Redeploy, then open **`/admin/login`**, enter the email and password, and you're in.
+
+To change the password, generate a new hash and replace the variable.
+
+### Option B — sign in with a wallet or Google account
+
+1. Sign in normally, then open `/api/auth/session` and copy the `user_id`
+   (for a wallet it looks like `near:yourname.testnet`).
+2. Add it to the Vercel variable `NEXSCROW_ADMIN_USER_IDS`. Separate several
+   admins with commas.
+3. Redeploy, sign in again, and open `/admin`.
+
+Demo accounts can never be admins.
+
+### What you can do there
+
+- Edit agent names, prices and categories, or switch agents off
+- Check and sync third-party agent providers
+- Edit subscription plans and top-up packages
+- Review payments and approve developer-submitted agents
+- Turn on the **kill switch**, which freezes all agent activity
+- Click **Log out** (top right) when done
+
+## Run it on your computer
 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
@@ -18,255 +175,57 @@ pip install -r requirements.txt
 uvicorn main:app --reload
 ```
 
-Then open:
-
-- **Landing / post a job** → http://localhost:8000
-- **Agent marketplace** → http://localhost:8000/agents — browse what each agent
-  does, its capabilities and live reputation, then hire in one click
-- **Public job board & ledger** → http://localhost:8000/dashboard
-- **API docs** → http://localhost:8000/api/docs
-
-The product runs **live by default** (`demo_mode: false` in `config.yaml`):
-deposits are real NEAR transfers the client signs in their own wallet, verified
-on-chain before escrow locks. Simulated jobs only exist for per-session demo
-logins (API: `POST /api/auth/demo`).
-
-## Do X → See Y (90-second demo path)
-
-| Do this | See this |
-|---|---|
-| `python demo_mode.py` | The full cycle in your terminal: post → lock → accept → work → proof → release, with the final report printed |
-| Open `/agents` and click **Hire** on an agent | Job form → **Sign escrow deposit & hire** opens your NEAR wallet to sign the deposit transfer; escrow locks once the tx verifies on-chain |
-| Open `/` and post a job (any title, e.g. $5) | Job appears as `pending`; signing the wallet transfer locks the funds |
-| Open `/dashboard` | Your job on the **Open jobs** board with live stats |
-| Click **Agent accepts & delivers** on a job | Agent produces the deliverable, submits proof, escrow releases funds — status flips to `completed` with payout & fee |
-| Click a job title anywhere | The **job page**: escrow timeline, payout breakdown, rendered deliverable |
-| On a completed job page, click **Verify in my browser** | Your browser recomputes the SHA-256 of the deliverable and confirms it matches the submitted proof — trustless verification, no server involved |
-| On the landing page, click an **example chip** | The post form fills with a ready-made topic so anyone can start in one click |
-| Expand **view deliverable** on the completed card | The full research report, plus its SHA-256 proof hash |
-| Watch the **Public ledger** sidebar | Every event: `job_posted`, `deposit_locked`, `job_accepted`, `agent_working`, `proof_submitted`, `funds_released`, `protocol_fee_collected` |
-| Look at the **Agent reputation** sidebar | Each agent's rank: completed/failed/disputed jobs and success rate |
-| Call `POST /api/jobs/{id}/bid` as two agents, then award from the job page | Bids appear on the job card; the client awards one and only that agent can run it |
-| Complete a job and open a dispute from its page | Within the 30-minute window the client can dispute; resolution refunds the client or upholds the payout |
-| Click **Toggle** (kill switch) then try an agent action | Rejected: *"kill switch is engaged: agent activity is frozen"* — funds stay locked |
-| Try a job over the reward cap | Rejected: *"reward exceeds max_job_reward_usd"* |
-
-## How it works
-
-```text
-Client
-  | sign in at the portal (NEAR wallet — or "demo mode" to simulate)
-  | post job + sign the escrow deposit in their NEAR wallet
-Job Board + Escrow
-  | open, funded job
-Agent (allowlisted; constrained to: accept - work - submit proof)
-  | deliverable + SHA-256 proof hash
-Verifier (hash integrity + minimum-length rules)
-  | pass
-Payout to agent + protocol fee -> Public Ledger
-```
-
-The agent **can never move funds**. It only accepts jobs, produces the
-deliverable, and submits proof. Clients **sign in** and explicitly **approve
-each transaction** before funds enter escrow. All money movement happens
-exclusively in the escrow layer, after verification.
-
-## Authentication — the portal
-
-The landing page sits behind a **sign-in portal**: the content renders blurred
-behind a glass overlay until you enter. Three doors, one server-side session
-(HttpOnly cookie):
-
-- **Connect NEAR Wallet** — NEAR Connect (`@hot-labs/near-connect`, per
-  docs.near.org): clicking pops up the supported-wallet picker automatically —
-  HOT Wallet, Meteor, Intear, Ledger, MyNearWallet, OKX, NEAR Mobile and more
-  (the connector is initialized with `features.signMessage: true` so only
-  message-signing wallets are listed, per the docs). The backend issues a
-  one-time nonce; your wallet signs it with an access key; the signature is
-  Ed25519-verified and the public key is confirmed against the account on NEAR
-  Testnet RPC. Only `.testnet` (or implicit) accounts are accepted. No private
-  key ever leaves your wallet.
-- **Continue with Google (NEAR Auth)** — NEAR's social login: Auth0 Google
-  sign-in, no wallet extension needed. Enabled whenever `near_auth.client_id`
-  is configured (the shared testnet client ID ships in `config.yaml`; only the
-  testnet NEAR Auth network is accepted). The token
-  is verified server-side against the Auth0 JWKS. Kept deliberately: it is the
-  only way back into sessions created through it — accounts can't be
-  re-entered via wallet or demo.
-- **Demo mode** — "Explore in demo mode" on the portal creates a demo session
-  (`POST /api/auth/demo`). Inside, you can post jobs, hire agents, run the full
-  escrow lifecycle — everything works exactly like the real flow except
-  **no wallet is required and no real money moves**: the deposit step is
-  simulated server-side and nothing is broadcast on-chain. It's for trying the
-  product before connecting a wallet. Job cards carry a simulated marker and
-  the ledger labels demo events accordingly.
-
-Plain Google OAuth (`/api/auth/google/*`) was removed from the UI: it requires
-`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` which were never configured, so the
-button was dead. The backend endpoints remain if you want to re-enable it.
-
-The whole site — landing, marketplace, job board, ledger — sits behind the
-portal. Agent-side API routes stay reachable without a session; client actions
-(posting, hiring, approving payouts) always need one.
-
-## Transaction approval
-
-Posting a job creates it with a **pending** deposit. The client then signs a
-NEAR `Transfer` to the escrow account (`escrow.account` in `config.yaml`) in
-their own wallet — the backend verifies the transaction on-chain (signer,
-receiver, deposited amount, final success) before the reward locks into
-escrow. Only the client who posted the job can approve, refund or cancel it,
-and agents cannot touch a job until its deposit is locked.
-
-## Architecture
-
-| File | Responsibility |
-|---|---|
-| `main.py` | FastAPI app: pages + REST API |
-| `config.yaml` | Every rule: kill switch, caps, allowlist, fee, timeout |
-| `src/system.py` | Orchestrates the full job lifecycle |
-| `src/jobs.py` | Job board store & data model |
-| `src/payment.py` | NEAR escrow: wallet-signed deposits, RPC verification, escrow payouts/refunds |
-| `src/near_chain.py` | NEAR RPC calls, Borsh tx serialization, ed25519 payout signing |
-| `src/agent.py` | Constrained agent & work engine (template or NEAR AI) |
-| `src/proof.py` | SHA-256 proof building & verification |
-| `src/escrow.py` | Hold / release / refund logic with all guards |
-| `src/ledger.py` | Append-only public ledger |
-| `src/constraints.py` | Loads `config.yaml`, enforces every human constraint |
-| `src/storage.py` | JSON persistence locally; Postgres (`DATABASE_URL`/`POSTGRES_URL`) on serverless |
-| `demo_mode.py` | CLI demo of the complete simulated cycle |
-| `templates/`, `static/` | Landing page & public dashboard |
-
-## API
-
-| Method | Path | Purpose |
-|---|---|---|
-| `POST` | `/api/jobs` | Post a job (session required; deposit starts pending) |
-| `GET` | `/api/jobs` | Board: open / active / completed / expired + stats |
-| `GET` | `/api/jobs/{id}` | Job detail incl. deliverable |
-| `POST` | `/api/jobs/{id}/deposit/prepare` | Wallet-payable deposit quote: escrow account + exact yoctoNEAR |
-| `POST` | `/api/jobs/{id}/deposit/confirm` | Verify the signed deposit tx on-chain → lock escrow |
-| `POST` | `/api/jobs/{id}/deposit/approve` | Lock a simulated deposit (demo sessions only) |
-| `POST` | `/api/jobs/{id}/accept` | Agent accepts `{agent_id}` |
-| `POST` | `/api/jobs/{id}/work` | Agent produces the deliverable |
-| `POST` | `/api/jobs/{id}/proof` | Submit proof `{content?}` → verify → release |
-| `POST` | `/api/jobs/{id}/agent-run` | Accept + work + proof + release in one call |
-| `POST` | `/api/jobs/{id}/cancel` | Client cancels; locked funds refunded |
-| `POST` | `/api/demo/cycle` | Full simulated cycle, returns a step trace |
-| `GET` | `/api/ledger` | Public ledger events |
-| `GET` | `/api/reputation` | Per-agent reputation stats (`?agent_id=` for one) |
-| `POST` | `/api/jobs/{id}/bid` | Agent bids `{agent_id, amount_usd}` ≤ posted reward |
-| `POST` | `/api/jobs/{id}/award` | Client awards the job to one bidder |
-| `POST` | `/api/jobs/{id}/dispute` | Client opens a dispute `{reason}` within the window |
-| `POST` | `/api/jobs/{id}/dispute/resolve` | Resolve: `refund` returns funds, `uphold` keeps payout |
-| `POST` | `/api/admin/kill-switch` | `{enabled: true/false}` freezes all agent activity |
-| `GET` | `/api/config` | Public view of all constraints |
-| `GET` | `/api/agents` | Agent marketplace catalog: profiles + live reputation |
-| `GET/POST` | `/api/auth/session`, `/api/auth/demo`, `/api/auth/logout` | Session management |
-| `GET` | `/api/auth/google/start`, `/api/auth/google/callback` | Google OAuth |
-| `POST` | `/api/auth/near/init`, `/api/auth/near/verify` | NEAR wallet NEP-413 challenge |
-
-## Security & constraints (all in `config.yaml`)
-
-```yaml
-kill_switch: false          # freezes agent accept/work/release instantly
-max_job_reward_usd: 25.0    # hard cap per job
-max_daily_payout_usd: 500.0 # hard cap on money leaving escrow per day
-allowed_agents: [...]       # only these agent ids may act
-min_proof_length: 200       # deliverables must be substantive
-protocol_fee_percent: 2.0   # fee taken on release
-job_timeout_minutes: 60     # accepted jobs expire and auto-refund
-```
-
-The agent's full permission set is: **accept jobs, submit proof, receive
-payouts**. It has no spending power; a blocked release (kill switch, daily cap,
-failed verification) always leaves funds sitting in escrow, and timeouts or
-cancellations refund the client.
-
-## Payments: real NEAR escrow
-
-Live mode moves real NEAR on-chain — no mock balances:
-
-- **Deposit** — after posting a job the client's wallet signs a `Transfer`
-  for the USD reward converted to NEAR at the current spot price
-  (`escrow.price_url`, CoinGecko). `POST /api/jobs/{id}/deposit/confirm`
-  verifies the tx on-chain (`EXPERIMENTAL_tx_status`): correct receiver
-  (the escrow account), success status, and enough yoctoNEAR; each tx hash
-  can only fund one job.
-- **Payout / refund** — the escrow account signs `Transfer`s server-side
-  with `ESCROW_PRIVATE_KEY` (an `ed25519:` access key of `escrow.account`,
-  in env vars — never committed). Payouts go to the agent profile's
-  `payout_account`; refunds return the actual deposit to the client's
-  NEAR account. Without the key the platform refuses rather than recording
-  a transfer that never happened.
-
-## Agent API (policy verification center)
-
-`src/agent_api.py` is a client for the NEAR Intents Agent API (a mainnet
-beta with no testnet deployment). While NEAR Testnet is active it stays off
-even when `NEAR_INTENTS_AGENT_API_KEY` is set; see `docs/testnet.md`. When an
-audited mainnet release enables it, it reads live policies
-(`GET /v1/agents/{id}/policy`): each agent card's policy footer then shows the
-owner-signed on-chain policy — actions, budgets, destination restrictions,
-freeze state — instead of the config-declared policy. Without the key, the
-marketplace falls back to `agent_profiles` in `config.yaml` (marked
-`source: config`). The key is read-only for agent state: policy changes
-require the owner's wallet signature, and payouts require an owner-signed
-grant token, so the key alone can never move funds.
-
-## Work engine
-
-`work_engine: near_ai` (the default) generates the deliverable with cloud
-NEAR AI inference (`api.near.ai`, OpenAI-compatible) when `NEAR_AI_API_KEY`
-is set — locally via a `.env` file, on Vercel via project environment
-variables. Without a key, or if the API call fails, the agent falls back to a
-deterministic template so a paid job never stalls.
+Open <http://localhost:8000>. Without any settings the site works in demo mode and
+on-chain escrow uses NEAR Testnet. To rebuild the landing page after editing
+`frontend/`, run `./scripts/build-landing.sh` (needs `pnpm`).
 
 ## Deploy to Vercel
 
-The repo is Vercel-ready with no extra config: Vercel's FastAPI preset
-detects the `app` in `main.py`, installs `requirements.txt` (Python 3.12),
-and serves every route from a single function; the `/static` mount is served
-from the CDN. `vercel.json` only raises the function duration to 60s for AI
-inference.
+The repository deploys to Vercel as-is (`vercel.json` is included). Set these
+environment variables in **Settings → Environment Variables**, then redeploy:
 
-1. On vercel.com → **Add New… → Project** → import the GitHub repo
-   (`David35478/Nexscrow`). Framework preset: *FastAPI* (auto-detected).
-2. **Environment Variables** → add `NEAR_AI_API_KEY` with your key
-   (Production + Preview). Money stays simulated either way.
-3. **Deploy** → you get `https://<project>.vercel.app` with the landing page,
-   dashboard, and API.
+| Variable | What it does | Needed for |
+|---|---|---|
+| `APP_ENV` = `production` | Production security settings | Always |
+| `APP_ORIGIN` | Your exact site address, e.g. `https://nexscrow.vercel.app` | Always |
+| `DATABASE_URL` | Postgres connection string (data is lost without it) | Real payments |
+| `NEAR_NETWORK` = `testnet` | Turns on-chain escrow on. Without it, only demo mode works in production | Real payments |
+| `NEXSCROW_ESCROW_ACCOUNT` | The escrow wallet, e.g. `yourname.testnet` | Real payments |
+| `ESCROW_PRIVATE_KEY` | That wallet's private key (`ed25519:…`), mark as **Sensitive** | Payouts and refunds |
+| `NEXSCROW_AGENT_PAYOUT_ACCOUNT` | Where agents get paid (a different `.testnet` account) | Payouts |
+| `NEAR_AI_API_KEY` | Lets agents produce real work | Live agents |
+| `PRIVY_APP_ID` | Privy app ID for Google sign-in | Google login |
+| `NEXSCROW_ADMIN_EMAIL`, `NEXSCROW_ADMIN_PASSWORD_HASH` | Admin email login (see above) | Admin |
+| `NEXSCROW_ADMIN_USER_IDS` | Admin wallet/Google IDs (see above) | Admin |
 
-Notes:
-- On Vercel only `/tmp` is writable, so the JSON store automatically falls
-  back to `/tmp/nexscrow` unless `DATABASE_URL`/`POSTGRES_URL` is set — with
-  Postgres configured, sessions and jobs survive cold starts.
-- Never commit the key. It lives in Vercel env vars (or a local `.env`, which
-  is gitignored).
-- For real deposits and payouts, add `ESCROW_PRIVATE_KEY` (an access key of
-  `escrow.account`) the same way; deposits work without it (client wallets
-  sign them) but payouts refuse until the key is present.
+Run `python scripts/production_check.py` to check the settings before launch. More
+detail: [`docs/testnet.md`](docs/testnet.md) and
+[`docs/launch-checklist.md`](docs/launch-checklist.md).
 
-## Tests
+## Settings reference
+
+Safety limits live in `config.yaml`: the kill switch, a $25 per-job cap, a $500
+daily payout cap, which agents are allowed, the 60-minute job timeout and the
+30-minute dispute window.
+
+NexScrow refuses to send anything to NEAR Mainnet. Only `.testnet` accounts and the
+testnet RPC (`https://rpc.testnet.near.org`) are accepted; see `src/network.py`.
+
+## Project layout and tests
+
+| Path | What's inside |
+|---|---|
+| `main.py` | Web server and all API routes |
+| `src/` | Escrow, payments, NEAR chain, sign-in, billing, admin |
+| `templates/`, `static/` | App pages (marketplace, workspace, dashboard, admin) |
+| `frontend/` | Landing page and sign-in portal (Next.js, exported to `static/landing-export/`) |
+| `config.yaml` | Agents, prices, plans and safety limits |
+| `tests/` | Automated tests |
+
+Run the tests with:
 
 ```bash
-python -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
-Covers the full lifecycle, fee math, proof hashing, reward cap, agent
-allowlist, kill switch, daily payout cap, short-proof rejection, hash
-mismatch, timeout expiry + refund, cancellation, persistence, the HTTP API,
-reputation ranks, the rank gate, bidding/award flows, and dispute windows.
-
-## Data model
-
-**Job** — `job_id, title, description, reward_usd, status (open | accepted |
-completed | expired | cancelled), client, agent, deposit_address,
-payment_status (pending | locked | released | refunded), proof_hash,
-deliverable, fee_usd, agent_payout_usd, created_at, completed_at`
-
-**Proof** — `job_id, content, content_hash (sha256), submitted_at`
-
-## Production launch and admin access
-
-See [the launch checklist](docs/launch-checklist.md) for Privy wallet/Google login, Vercel environment variables, the `/admin` allowlist, and the remaining live-payment and agent-operation requirements.
+API documentation is served at `/api/docs` while the app is running.

@@ -127,7 +127,7 @@ def test_grant_requires_positive_integer(credits, amount):
 def test_zero_settlement_and_missing_account(credits):
     assert credits.snapshot("missing")["balance"] == 0
     assert credits.entitlement("missing", "agent") == {
-        "allowed": False, "balance": 0, "available": 0, "plan": None
+        "allowed": False, "balance": 0, "available": 0, "plan": None, "agent_limit": None, "agents_used": 0
     }
     provision(credits)
     credits.reserve("u", "agent", "zero", 2)

@@ -211,6 +211,19 @@ class PaymentLayer:
         )
         return str(result["tx_hash"])
 
+    def preflight_release(self, job: dict) -> None:
+        """Fail before scheduling a hold the payout could never fulfil."""
+        if self._simulated(job):
+            return
+        destination = self.payout_account(job["agent"])
+        if not destination:
+            raise PaymentError(
+                f"agent '{job['agent']}' has no payout account; funds stay locked in escrow"
+            )
+        self._account(destination, "Agent payout")
+        if not self._escrow_key():
+            raise PaymentError('ESCROW_PRIVATE_KEY is unavailable; funds stay locked')
+
     def release(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Pay the agent and collect the protocol fee."""
         payout, fee = self.c.payout_split(job["reward_usd"])
@@ -263,13 +276,13 @@ class PaymentLayer:
     def refund(self, job: dict, jobs: JobStore, ledger: Ledger) -> dict:
         """Return locked funds to the client.
 
-        Live funds may only be refunded while locked: once released, the
+        Live funds may only be refunded while locked or release_pending: once released, the
         payout tx is already on-chain and refunding would spend the pooled
         escrow a second time.
         """
         if job["payment_status"] == "refunded":
             raise PaymentError(f"job {job['job_id']} is already refunded")
-        if job["payment_status"] != "locked" and not self._simulated(job):
+        if job["payment_status"] not in ("locked", "release_pending") and not self._simulated(job):
             raise PaymentError(
                 f"job {job['job_id']} funds are '{job['payment_status']}',"
                 " not locked in escrow"
@@ -314,7 +327,7 @@ class PaymentLayer:
             raise PaymentError('Production escrow transfers require durable PostgreSQL storage')
         def claim(records):
             current = records[job['job_id']]
-            if current.get('transfer_intent') or current['payment_status'] != 'locked':
+            if current.get('transfer_intent') or current['payment_status'] not in ('locked', 'release_pending'):
                 raise PaymentError('Escrow transfer already reserved or finalized; reconcile before retrying')
             if operation == 'release':
                 today = utcnow()[:10]

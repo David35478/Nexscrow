@@ -247,7 +247,7 @@ def test_manual_release_requires_buyer_approval(tmp_path):
     # approving as the owner releases the escrow
     released = c.post(f"/api/jobs/{job_id}/approve-work").json()
     assert released["status"] == "completed"
-    assert released["payment_status"] == "released"
+    assert released["payment_status"] == "release_pending"
     events = c.get("/api/ledger").json()["events"]
     assert any(e["event_type"] == "work_delivered" for e in events)
     assert any(e["event_type"] == "work_approved" for e in events)
@@ -260,7 +260,7 @@ def test_auto_release_bypasses_approval(tmp_path):
     c.post(f"/api/jobs/{job_id}/deposit/approve")
     done = c.post(f"/api/jobs/{job_id}/agent-run", json={"agent_id": "agent-oracle-1"}).json()
     assert done["job"]["status"] == "completed"
-    assert done["job"]["payment_status"] == "released"
+    assert done["job"]["payment_status"] == "release_pending"
 
 
 def test_approve_work_requires_delivered(tmp_path):

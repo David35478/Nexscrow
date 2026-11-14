@@ -25,7 +25,7 @@ def test_all_admin_routes_require_server_admin_identity(tmp_path, monkeypatch):
     assert anon.get('/api/admin/overview').status_code == 401
     for client in [developer, demo]:
         assert client.get('/api/admin/overview').status_code == 403
-        assert client.get('/admin').status_code == 403
+        assert client.get('/admin', follow_redirects=False).headers['location'] == '/admin/login'
         assert client.put('/api/admin/agents/agent-oracle-1', json=AGENT).status_code == 403
         assert client.post('/api/admin/providers/sync', json={}).status_code == 403
         assert client.post('/api/admin/kill-switch', json={'enabled': True}).status_code == 403

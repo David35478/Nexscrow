@@ -277,18 +277,18 @@ export default function NexscrowPage() {
         <div className="max-w-6xl mx-auto">
           <div className="mb-16">
             <PixelIcon type="workflow" size={40} />
-            <div className="mt-4"><Tag>WORKFLOW</Tag></div>
+            <div className="mt-4"><Tag>HOW ESCROW WORKS</Tag></div>
             <RevealText className="mt-5 text-4xl md:text-5xl font-light tracking-tight leading-[1.05]">
-              {"From idea to running agent\nin four clear steps."}
+              {"Your money is locked until\nthe work is delivered."}
             </RevealText>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3" onMouseMove={handleMouse}>
             {[
-              { n: "01", title: "Discover",  desc: "Describe your agent in plain language. Set objectives, tools, and boundaries.", delay: 0,   img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/define-5aafAmGBrxZpOqJ3XLHY3n3qzC2I5K.png" },
-              { n: "02", title: "Describe", desc: "Chain agents together in the visual editor. Wire triggers, conditions, and outputs.", delay: 80,  img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/compose-5RT5VR4f1Y3GoFmovqTKLTG4UXp3g2.png" },
-              { n: "03", title: "Confirm",    desc: "Run sandboxed simulations. Inspect every decision in the execution trace.", delay: 140, img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/test-zm8guZwxJHtwWsJ7XO4B0CF7GzlNK8.png" },
-              { n: "04", title: "Review",  desc: "Review the delivered result. Escrow follows the existing client approval and release rules.", delay: 200, img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/deploy-an8fgHSLzniojkcmRyGGIFQUJF9T5J.png" },
+              { n: "01", title: "Fund",    desc: "Pick an agent, describe the task, and pay into escrow from your NEAR wallet. The money is locked, not sent to the agent.", delay: 0,   img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/define-5aafAmGBrxZpOqJ3XLHY3n3qzC2I5K.png" },
+              { n: "02", title: "Work",    desc: "The agent starts only after your deposit is confirmed on-chain, and works on your brief.", delay: 80,  img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/compose-5RT5VR4f1Y3GoFmovqTKLTG4UXp3g2.png" },
+              { n: "03", title: "Proof",   desc: "The result is fingerprinted with SHA-256 and published on a public proof page anyone can verify.", delay: 140, img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/test-zm8guZwxJHtwWsJ7XO4B0CF7GzlNK8.png" },
+              { n: "04", title: "Release", desc: "Approve to release payment after a 30-minute dispute window, or dispute and get refunded from escrow.", delay: 200, img: "https://hebbkx1anhila5yf.public.blob.vercel-storage.com/deploy-an8fgHSLzniojkcmRyGGIFQUJF9T5J.png" },
             ].map((step) => (
               <BentoCard key={step.n} className="relative overflow-hidden flex flex-col min-h-[320px]" delay={step.delay}>
                 {/* Image at top — mask fades it out strongly before the bottom edge */}
@@ -381,7 +381,7 @@ export default function NexscrowPage() {
                   <div className="w-2 h-2 rounded-full bg-emerald-500/80 animate-pulse" />
                   <span className="text-xs text-black/40 tracking-widest">AGENT MARKETPLACE</span>
                 </div>
-                <p className="text-sm text-black/45">Pay per task or use subscription credits, with NEAR escrow for funded jobs.</p>
+                <p className="text-sm text-black/45">Pay per call through NEAR escrow, or use the agent calls included in a plan.</p>
               </div>
             </div>
           </div>
@@ -536,30 +536,41 @@ export default function NexscrowPage() {
             </RevealText>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3" onMouseMove={handleMouse}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3" onMouseMove={handleMouse}>
+            {/* Mirrors billing.plans in config.yaml; keep both in sync. */}
             {[
+              {
+                name: "Free",
+                price: "$0",
+                period: "/ 30 days",
+                sub: "Try agents at no cost",
+                features: ["20 agent calls (one-time)", "1 agent", "Paid in USDC/USDT (Mainnet)"],
+                delay: 0,
+              },
               {
                 name: "Starter",
                 price: "$9",
+                period: "/ 30 days",
                 sub: "Start experimenting",
-                features: ["500 subscription credits", "Manual crypto renewal", "Escrow billed separately"],
-                delay: 0,
+                features: ["1,000 agent calls / 30 days", "Up to 5 different agents", "Paid in USDC/USDT (Mainnet)"],
+                delay: 60,
               },
               {
                 name: "Pro",
                 price: "$29",
-                period: "/mo",
+                period: "/ 30 days",
                 sub: "For teams shipping fast",
-                features: ["2,000 subscription credits", "Manual crypto renewal", "Escrow billed separately"],
+                features: ["5,000 agent calls / 30 days", "Up to 15 different agents", "Paid in USDC/USDT (Mainnet)"],
                 highlight: true,
-                delay: 80,
+                delay: 120,
               },
               {
                 name: "Business",
                 price: "$79",
-                sub: "7,000 credits / 30-day period",
-                features: ["NEAR escrow jobs", "Transaction history", "Pay per task or by subscription"],
-                delay: 140,
+                period: "/ 30 days",
+                sub: "For high-volume work",
+                features: ["15,000 agent calls / 30 days", "Unlimited agents", "Paid in USDC/USDT (Mainnet)"],
+                delay: 180,
               },
             ].map((plan) => (
               <BentoCard
@@ -593,6 +604,10 @@ export default function NexscrowPage() {
               </BentoCard>
             ))}
           </div>
+          <p className="mt-8 text-center text-xs text-black/40 leading-relaxed max-w-2xl mx-auto">
+            Call top-ups: $5 for 500 calls · $15 for 1,750 · $40 for 5,000. Built-in agents use 1 call per request from a plan, or cost $0.10 per call through NEAR escrow.
+            Subscription checkout uses USDC/USDT via NEAR Intents on Mainnet only; on Testnet use pay-per-call escrow.
+          </p>
         </div>
       </section>
 
@@ -628,7 +643,7 @@ export default function NexscrowPage() {
             Start building your<br />agent workforce.
           </h2>
           <p className="text-sm text-black/45 leading-relaxed mb-10">
-            Find an agent. Choose pay-per-call NEAR escrow or separate subscription credits when available.
+            Find an agent. Pay per call through NEAR escrow, or use a plan with monthly agent calls.
           </p>
           {!submitted ? (
             <form

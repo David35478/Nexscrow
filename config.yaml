@@ -42,7 +42,7 @@ allowed_agents:
 # Agent marketplace profiles - what each agent does, shown to customers.
 agent_profiles:
   agent-oracle-1:
-    credit_cost: 10
+    credit_cost: 1
     pricing:
       task_price_usd: 0.10
     display_name: Oracle
@@ -73,7 +73,7 @@ agent_profiles:
       payout_destinations: [escrow only]
       emergency_freeze: false
   agent-scribe-2:
-    credit_cost: 10
+    credit_cost: 1
     pricing:
       task_price_usd: 0.10
     display_name: Scribe
@@ -103,7 +103,7 @@ agent_profiles:
       payout_destinations: [escrow only]
       emergency_freeze: false
   agent-quant-3:
-    credit_cost: 10
+    credit_cost: 1
     pricing:
       task_price_usd: 0.10
     display_name: Quant
@@ -183,12 +183,13 @@ billing:
   enabled: false
   slippage_bps: 100
   max_price_age_seconds: 600
+  # 'credits' = agent calls (1 credit per call); agent_limit = different agents per period (null = unlimited)
   plans:
-    - {id: free, name: Free, price_usd: '0.00', credits: 20, period_days: 30, rollover: false, allowed_agents: ['*']}
-    - {id: starter, name: Starter, price_usd: '9.00', credits: 500, period_days: 30, rollover: false, allowed_agents: ['*']}
-    - {id: pro, name: Pro, price_usd: '29.00', credits: 2000, period_days: 30, rollover: false, allowed_agents: ['*']}
-    - {id: business, name: Business, price_usd: '79.00', credits: 7000, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: free, name: Free, price_usd: '0.00', credits: 20, agent_limit: 1, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: starter, name: Starter, price_usd: '9.00', credits: 1000, agent_limit: 5, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: pro, name: Pro, price_usd: '29.00', credits: 5000, agent_limit: 15, period_days: 30, rollover: false, allowed_agents: ['*']}
+    - {id: business, name: Business, price_usd: '79.00', credits: 15000, agent_limit: null, period_days: 30, rollover: false, allowed_agents: ['*']}
   topup_packages:
-    - {id: small, price_usd: '5.00', credits: 250}
-    - {id: medium, price_usd: '15.00', credits: 1000}
-    - {id: large, price_usd: '40.00', credits: 3000}
+    - {id: small, price_usd: '5.00', credits: 500}
+    - {id: medium, price_usd: '15.00', credits: 1750}
+    - {id: large, price_usd: '40.00', credits: 5000}

@@ -10,7 +10,7 @@ from src.agent import WorkEngine
 from src.agent_api import AgentApiClient
 from src.constraints import ConstraintError, Constraints
 from src.disputes import assert_resolvable, open_dispute, resolve_dispute
-from src.escrow import Escrow
+from src.escrow import Escrow, ReleaseBlocked
 from src.jobs import JobStore
 from src.ledger import Ledger
 from src.payment import PaymentLayer
@@ -265,8 +265,12 @@ class NexscrowSystem:
         # Validate the dispute before moving funds; run the refund before
         # marking resolved so a failed refund doesn't strand it.
         assert_resolvable(job, outcome)
+        if outcome == "release":
+            outcome = "uphold"
         if outcome == "refund":
             self.payment.refund(job, self.jobs, self.ledger)
+        elif job.get("payment_status") == "release_pending":
+            self.payment.release(job, self.jobs, self.ledger)
         resolve_dispute(job, outcome, self.jobs, self.ledger)
         if outcome == "refund":
             ledger_note = "dispute resolved: funds returned to the client"
@@ -274,6 +278,20 @@ class NexscrowSystem:
             ledger_note = "dispute resolved: payout to the agent stands"
         self.ledger.append("dispute_resolved", job_id=job_id, details=ledger_note)
         return self.jobs.get(job_id)
+
+    @staticmethod
+    def public_job(job: dict, owner: bool = False) -> dict:
+        """Anonymous-safe job view: allowlisted proof fields only; owners get everything."""
+        if owner:
+            return job
+        keys = (
+            "job_id", "title", "status", "payment_status", "reward_usd", "agent",
+            "proof_hash", "proof_submitted_at", "simulated", "fee_usd",
+            "agent_payout_usd", "deposit_tx_hash", "payout_tx_hash", "refund_tx_hash",
+            "dispute_window_minutes", "disputed", "dispute_resolved",
+            "created_at", "completed_at", "release_due_at",
+        )
+        return {k: job.get(k) for k in keys}
 
     def reputation(self, agent_id: str | None = None) -> dict:
         if agent_id:
@@ -448,7 +466,7 @@ class NexscrowSystem:
             proof_hash=proof["content_hash"],
             proof_submitted_at=proof["submitted_at"],
         )
-        return self.escrow.release_to_agent(job, self.jobs)
+        return self._hold_release(job)
 
     def approve_work(self, job_id: str, client_id: str | None = None) -> dict:
         """Buyer approves delivered work; escrow releases the funds."""
@@ -465,7 +483,45 @@ class NexscrowSystem:
             job_id=job_id,
             details="client approved the deliverable",
         )
-        return self.escrow.release_to_agent(job, self.jobs)
+        return self._hold_release(job)
+
+    def _hold_release(self, job: dict) -> dict:
+        window = int(job.get("dispute_window_minutes") or 0)
+        self.payment.preflight_release(job)
+        job = self.escrow.schedule_release(job, self.jobs, window)
+        return self._pay_release(job) if window <= 0 else job
+
+    def _pay_release(self, job: dict) -> dict:
+        """Cap check + payout for a job whose hold has ended."""
+        fresh = self.jobs.get(job["job_id"])
+        if fresh["payment_status"] != "release_pending":
+            return fresh
+        released_today = self.ledger.released_today()
+        if released_today + fresh["reward_usd"] > self.constraints.max_daily_payout_usd:
+            self.ledger.append(
+                "release_blocked",
+                job_id=fresh["job_id"],
+                details=f"daily payout cap hit: ${released_today:.2f} already released",
+            )
+            raise ReleaseBlocked("daily payout limit reached; funds stay in escrow")
+        return self.payment.release(fresh, self.jobs, self.ledger)
+
+    def settle_due_releases(self) -> dict:
+        """Pay every undisputed hold whose dispute window has ended. Idempotent."""
+        settled, failed = [], []
+        now = datetime.now(timezone.utc)
+        for job in self.jobs.list():
+            if job.get("payment_status") != "release_pending" or job.get("disputed"):
+                continue
+            try:
+                if now < _dt(job["release_due_at"]):
+                    continue
+                self.constraints.assert_live()
+                self._pay_release(job)
+                settled.append(job["job_id"])
+            except Exception as exc:  # one bad job must not block the rest
+                failed.append({"job_id": job["job_id"], "error": str(exc)})
+        return {"settled": len(settled), "failed": len(failed), "job_ids": settled, "errors": failed}
 
     def agent_run(self, job_id: str, agent_id: str) -> dict:
         """Agent-side flow: accept -> work -> proof -> release. Returns a trace."""
@@ -498,8 +554,8 @@ class NexscrowSystem:
                 "step": "proof_verified_funds_released",
                 "detail": (
                     f"hash {job['proof_hash'][:16]}... verified -"
-                    f" ${job['agent_payout_usd']:.2f} released to agent"
-                    f" (${job['fee_usd']:.2f} protocol fee)"
+                    f" ${job['reward_usd']:.2f} held in escrow until the dispute window"
+                    " closes, then paid to the agent"
                 ),
             }
         )
@@ -532,8 +588,11 @@ class NexscrowSystem:
         )
         result = self.agent_run(job["job_id"], self.constraints.allowed_agents[0])
         trace.extend(result["trace"])
+        if result["job"]["payment_status"] == "release_pending":
+            return {"job": self._pay_release(result["job"]), "trace": trace}
         if result["job"]["status"] == "delivered":
             job = self.approve_work(result["job"]["job_id"], client_id="demo-client")
+            job = self._pay_release(job)  # demo settles immediately
             trace.append(
                 {
                     "step": "client_approved_work",
@@ -553,6 +612,7 @@ class NexscrowSystem:
         """Expire accepted jobs whose timeout passed; refund abandoned
         delivered work whose deadline + review window passed."""
         expired: list[dict] = []
+        self.settle_due_releases()
         now = datetime.now(timezone.utc)
         for job in self.jobs.list():
             if job["status"] == "delivered":
@@ -631,7 +691,9 @@ class NexscrowSystem:
         self.expire_jobs()
         jobs = self.jobs.list()
         completed = [j for j in jobs if j["status"] == "completed"]
-        released = round(sum(j["reward_usd"] for j in completed), 2)
+        released = round(
+            sum(j["reward_usd"] for j in completed if j["payment_status"] == "released"), 2
+        )
         fees = round(sum(j.get("fee_usd") or 0.0 for j in completed), 2)
         return {
             "jobs": jobs,

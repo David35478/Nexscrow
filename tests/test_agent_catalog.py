@@ -22,7 +22,7 @@ def test_builtin_agent_call_price_is_ten_cents_without_changing_credit_cost_or_c
         options = client.get(f"/api/requests/options/{agent_id}")
         assert options.status_code == 200
         assert options.json()["task_price_usd"] == 0.1
-        assert options.json()["credit_cost"] == 10
+        assert options.json()["credit_cost"] == 1
 
         agent = next(a for a in app.state.system.agent_catalog(include_disabled=True) if a["agent_id"] == agent_id)
         assert agent["pricing"]["task_price_usd"] == 0.1

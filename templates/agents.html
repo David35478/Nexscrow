@@ -1,3 +1,4 @@
+{% from 'marketplace_components.html' import site_header %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,14 +14,7 @@
 <body class="app-surface {% if not view.user %}gated{% endif %}">
 
 
-  <nav class="nav">
-    <a class="brand" href="/">nex<span>crow</span></a>
-    <div class="nav-right">
-      <a href="/agents" class="nav-on">Marketplace</a>
-      <a href="/billing">Billing</a>
-      <a href="/dashboard">Board</a>
-    </div>
-  </nav>
+  {{ site_header('marketplace') }}
 
   <header class="wrap" style="padding-top:48px">
     <p class="kicker">Agent marketplace</p>
@@ -46,57 +40,7 @@
   <section class="wrap">
     <div class="panel-head"><h2 style="margin:0">Recommended agents</h2><span class="hint" id="rec-note"></span></div>
     <div class="agent-grid" id="agent-grid"></div>
-    <div id="agents-empty" class="empty hidden">No agents match — try another search or category.</div>
-  </section>
-
-  <section class="wrap" id="hire-panel" hidden>
-    <div class="panel" style="margin-bottom:0">
-      <h2>Create a new escrow job</h2>
-      <p class="sub" id="hire-agent-line"></p>
-      <form id="hire-form" class="form">
-        <label>Job title
-          <input name="title" required maxlength="200" placeholder="Research NEAR Intents adoption">
-        </label>
-        <label>Detailed instructions
-          <textarea name="description" maxlength="2000" placeholder="Research ecosystem adoption, integrations and transaction activity…"></textarea>
-        </label>
-        <label>Required deliverables
-          <input name="deliverables" maxlength="1000" placeholder="Research report with verifiable sources">
-        </label>
-        <label id="provider-inputs-label" class="hidden">Provider inputs (JSON)
-          <textarea name="provider_inputs" id="provider-inputs" maxlength="20000" aria-describedby="provider-schema-help"></textarea>
-          <small id="provider-schema-help">Match the input schema on the agent detail page. Inputs are validated before payment.</small>
-        </label>
-        <div class="row">
-          <label>Reward (USD)
-            <input name="reward_usd" id="reward-input" type="number" min="0.5" step="0.5" value="5" required>
-          </label>
-          <label>Deadline
-            <select name="deadline_hours">
-              <option value="">No deadline</option>
-              <option value="24">24 hours</option>
-              <option value="48" selected>48 hours</option>
-              <option value="72">72 hours</option>
-              <option value="168">7 days</option>
-            </select>
-          </label>
-        </div>
-        <fieldset class="release-options">
-          <legend>Payment release condition</legend>
-          <label class="radio-row">
-            <input type="radio" name="release_condition" value="manual" checked>
-            <span><b>Manual approval</b> — payment is released after you approve the submitted work.</span>
-          </label>
-          <label class="radio-row">
-            <input type="radio" name="release_condition" value="auto">
-            <span><b>Automatic</b> — payment is released as soon as the proof hash verifies.</span>
-          </label>
-        </fieldset>
-        <div class="escrow-summary" id="escrow-summary"></div>
-        <button type="submit" class="btn primary">Sign escrow deposit &amp; hire</button>
-      </form>
-      <div id="hire-result" class="result hidden"></div>
-    </div>
+    <div id="agents-empty" class="empty hidden">No agents match — try another search or category. <a href="/app">Browse all agents</a></div>
   </section>
 
   <section class="wrap">
@@ -123,7 +67,6 @@
     let CAT = "all";
     let QUERY = "";
     let REC_MODE = false;
-    const feePct = {{ view.constraints.protocol_fee_percent }};
     let LIVE_READY = false;
     let IS_DEMO = false;
     let SIGNED_IN = false;
@@ -158,9 +101,7 @@
             ${a.policy.emergency_freeze ? "Freeze: ENGAGED" : "Kill switch: armed"}
           </div>
           <div class="agent-actions">
-            ${SIGNED_IN
-              ? `<button class="btn primary" data-hire="${esc(a.agent_id)}">Hire ${esc(a.display_name)}</button>`
-              : `<a class="btn primary" href="/agents">Connect wallet to hire</a>`}
+            <a class="btn primary" href="/agents/${encodeURIComponent(a.agent_id)}">View agent &amp; fixed price →</a>
           </div>
         </article>`;
     }
@@ -174,9 +115,6 @@
         (CAT === "all" || a.specialization.toLowerCase() === CAT) && matchesText(a));
       grid.innerHTML = shown.map((a) => agentCard(a, a._rec)).join("");
       document.getElementById("agents-empty").classList.toggle("hidden", shown.length > 0);
-      grid.querySelectorAll("[data-hire]").forEach((btn) =>
-        btn.addEventListener("click", () => openHire(btn.dataset.hire))
-      );
     }
 
     async function loadMarketplace() {
@@ -197,7 +135,7 @@
       REC_MODE = false;
       ALL.forEach((a) => (a._rec = null));
       render();
-      if (params.get("agent") && SIGNED_IN) openHire(params.get("agent"));
+      if (params.get("agent")) location.replace(`/agents/${encodeURIComponent(params.get("agent"))}`);
       const lb = await fetch("/api/leaderboard").then((r) => r.json()).then((d) => d.agents);
       document.getElementById("leaderboard").innerHTML = lb.length
         ? lb.map((a, i) => `
@@ -234,77 +172,6 @@
       render();
     }
 
-    function openHire(agentId) {
-      const agent = ALL.find((a) => a.agent_id === agentId);
-      if (!agent) return;
-      const external = agent.provider_id && agent.provider_id !== "nexscrow";
-      document.getElementById("provider-inputs-label").classList.toggle("hidden", !external);
-      const sample = Object.fromEntries(Object.entries(agent.input_schema?.properties || {}).map(([key, schema]) => [key, schema.type === "boolean" ? false : ["integer", "number"].includes(schema.type) ? 0 : schema.type === "array" ? [] : schema.type === "object" ? {} : ""]));
-      document.getElementById("provider-inputs").value = external ? JSON.stringify(sample, null, 2) : "";
-      const panel = document.getElementById("hire-panel");
-      document.getElementById("hire-agent-line").innerHTML =
-        `Hiring <b>${esc(agent.display_name)}</b> — ${esc(agent.tagline)}.`;
-      document.getElementById("hire-form").dataset.agent = agentId;
-      panel.hidden = false;
-      updateSummary();
-      window.scrollTo({ top: panel.offsetTop - 90, behavior: "smooth" });
-    }
-
-    function updateSummary() {
-      const reward = parseFloat(document.getElementById("reward-input").value) || 0;
-      const fee = (reward * feePct) / 100;
-      document.getElementById("escrow-summary").innerHTML = `
-        <div><span>Escrow amount</span><b>$${reward.toFixed(2)}</b></div>
-        <div><span>Protocol fee (${feePct}%)</span><b>$${fee.toFixed(2)}</b></div>
-        <div><span>Agent receives</span><b>$${(reward - fee).toFixed(2)}</b></div>`;
-    }
-    document.getElementById("reward-input").addEventListener("input", updateSummary);
-
-    document.getElementById("hire-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const fd = new FormData(e.target);
-      const agentId = e.target.dataset.agent;
-      const result = document.getElementById("hire-result");
-      result.classList.remove("hidden", "error");
-      try {
-        const post = (path, body) => fetch(path, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: body ? JSON.stringify(body) : undefined,
-        }).then(async (r) => {
-          const d = await r.json().catch(() => ({}));
-          if (!r.ok) throw new Error(d.error || d.detail || r.statusText);
-          return d;
-        });
-        const { job } = await post("/api/jobs", {
-          external_agent_id: agentId.startsWith("external-") ? agentId : null,
-          provider_inputs: agentId.startsWith("external-") ? JSON.parse(fd.get("provider_inputs")) : null,
-          title: fd.get("title"),
-          description: fd.get("description"),
-          deliverables: fd.get("deliverables"),
-          reward_usd: parseFloat(fd.get("reward_usd")),
-          deadline_hours: fd.get("deadline_hours") ? parseInt(fd.get("deadline_hours")) : null,
-          release_condition: fd.get("release_condition"),
-        });
-        if (job.simulated) {
-          await post(`/api/jobs/${job.job_id}/deposit/approve`);
-        } else {
-          // Real escrow: open the wallet to sign the NEAR deposit.
-          result.textContent = `✓ Job ${job.job_id} posted. Opening your wallet to sign the escrow deposit…`;
-          const pay = await window.payEscrow(job.job_id);
-          if (pay && pay.redirected) return; // browser wallet: resumes on /near-callback
-        }
-        result.textContent = `✓ Escrow deposit locked on-chain. Agent ${agentId} is starting…`;
-        const done = await post(`/api/jobs/${job.job_id}/agent-run`, { agent_id: agentId }).then((d) => d.job);
-        result.textContent = done.status === "delivered"
-          ? `✓ ${done.agent} delivered and the proof verified. $${done.reward_usd.toFixed(2)} is held in escrow awaiting your approval: /job/${done.job_id}`
-          : `✓ Proof verified and $${done.agent_payout_usd.toFixed(2)} released to ${done.agent} (fee $${done.fee_usd.toFixed(2)}): /job/${done.job_id}`;
-        loadMarketplace();
-      } catch (err) {
-        result.classList.add("error");
-        result.textContent = `✗ ${err.message}`;
-      }
-    });
 
     loadMarketplace();
   </script>

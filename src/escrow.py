@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from src.constraints import Constraints
 from src.jobs import JobStore
 from src.ledger import Ledger
@@ -19,7 +21,7 @@ class Escrow:
         self.ledger = ledger
 
     def require_locked(self, job: dict) -> None:
-        if job["payment_status"] != "locked":
+        if job["payment_status"] not in ("locked", "release_pending"):
             raise ReleaseBlocked(
                 f"job {job['job_id']} funds are '{job['payment_status']}',"
                 " not locked in escrow"
@@ -44,8 +46,34 @@ class Escrow:
             raise ReleaseBlocked("daily payout limit reached; funds stay in escrow")
         return self.payment.release(job, jobs, self.ledger)
 
+    def schedule_release(self, job: dict, jobs: JobStore, window_minutes: int) -> dict:
+        """Hold funds for the dispute window; settle_due_releases pays out later."""
+        self.c.assert_live()
+        if job["status"] not in ("accepted", "delivered"):
+            raise ReleaseBlocked(f"job {job['job_id']} is '{job['status']}', not releasable")
+        if job["payment_status"] != "locked":
+            raise ReleaseBlocked(
+                f"job {job['job_id']} funds are '{job['payment_status']}',"
+                " not locked in escrow"
+            )
+        now = datetime.now(timezone.utc)
+        due = now + timedelta(minutes=max(window_minutes, 0))
+        self.ledger.append(
+            "release_scheduled",
+            job_id=job["job_id"],
+            details=f"payout held for the dispute window until {due.isoformat()}",
+            amount_usd=job["reward_usd"],
+        )
+        return jobs.update(
+            job["job_id"],
+            status="completed",
+            payment_status="release_pending",
+            completed_at=now.isoformat(),
+            release_due_at=due.isoformat(),
+        )
+
     def refund(self, job: dict, jobs: JobStore, new_status: str = "cancelled") -> dict:
         """Return escrowed funds to the client and close the job."""
-        if job["payment_status"] == "locked":
+        if job["payment_status"] in ("locked", "release_pending"):
             self.payment.refund(job, jobs, self.ledger)
         return jobs.update(job["job_id"], status=new_status)

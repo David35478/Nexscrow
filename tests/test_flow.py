@@ -60,7 +60,7 @@ def test_step_by_step_flow(make_system):
 
     job = sys_.submit_proof(job["job_id"])
     assert job["status"] == "completed"
-    assert job["payment_status"] == "released"
+    assert job["payment_status"] == "release_pending"
 
 
 def test_jobs_persist_to_disk(make_system, tmp_path):

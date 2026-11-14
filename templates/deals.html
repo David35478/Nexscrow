@@ -1,0 +1,19 @@
+{% from 'marketplace_components.html' import site_header %}
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Escrow deals — Nexscrow</title><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/marketplace.css"><link rel="stylesheet" href="/static/customer_dashboard.css"><link rel="stylesheet" href="/static/app-theme.css"></head><body class="app-surface">{{ site_header('account') }}
+<main class="container customer-dashboard">
+<header class="customer-heading"><div><p class="eyebrow">PERSON-TO-PERSON ESCROW</p><h1>Escrow deals</h1><p class="muted">Pay → held in escrow → both confirm delivery → released to the seller.</p></div><a class="btn btn-dark" href="/account">← Account</a></header>
+<div id="deal-notice" class="dashboard-notice" role="status" hidden></div>
+<div class="dashboard-columns">
+<article class="dashboard-card"><h2>New deal</h2>
+<form id="deal-form" class="stack">
+<label>Title<input name="title" required maxlength="120"></label>
+<label>Description<textarea name="description" maxlength="2000" rows="3"></textarea></label>
+<label>Amount (USD, 1–10,000)<input name="amount_usd" type="number" min="1" max="10000" step="0.01" required></label>
+<label>Seller NEAR account (optional)<input name="seller_account" placeholder="alice.testnet"></label>
+<button class="btn btn-dark" type="submit">Create deal</button>
+</form>
+<p id="invite" class="muted" hidden>Share this invite link with the seller: <input id="invite-link" readonly></p>
+</article>
+<article class="dashboard-card"><h2>My deals</h2><div id="deal-list" class="compact-list">Loading…</div></article>
+</div>
+</main><script src="/static/deals.js"></script></body></html>

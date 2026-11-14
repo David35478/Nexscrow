@@ -219,3 +219,22 @@ body.app-surface .section-kicker,body.app-surface .hero-eyebrow,body.app-surface
 @media(max-width:650px){body.app-surface .site-header,body.app-surface .nav{margin-bottom:24px}body.app-surface .nav-inner{padding:12px 16px}body.app-surface .main-nav{margin:0;justify-content:flex-start;gap:6px}body.app-surface .brand{font-size:11px}body.app-surface .nav-actions{margin-left:auto;width:auto}}
 body.app-surface .marketplace-cta,body.app-surface .balance-card{background:rgba(17,17,17,.92);border-color:rgba(0,0,0,.06);border-radius:16px;box-shadow:0 8px 32px rgba(0,0,0,.08)}
 body.app-surface .marketplace-cta .section-kicker{color:rgba(255,255,255,.5)}
+
+/* Unified nav: mobile collapse, step tracker */
+.nav-toggle{display:none}
+@media (max-width:760px){.site-header .nav-inner{flex-wrap:wrap}.nav-toggle{display:inline-flex;margin-left:auto}.site-header .main-nav{display:none;width:100%;order:5;flex-direction:column;gap:4px}.site-header .main-nav.open{display:flex}}
+.site-header .main-nav a[aria-current="page"]{font-weight:600}
+.step-tracker{list-style:none;display:flex;gap:6px;padding:0;margin:12px 0}
+.step-tracker li{flex:1;text-align:center;padding:8px 4px;border:1px solid var(--border,#ddd);border-radius:8px;font-size:.85rem;opacity:.6}
+.step-tracker li.done{opacity:1}
+.step-tracker li[aria-current="step"]{opacity:1;font-weight:700;border-color:currentColor}
+.step-tracker li.bad{opacity:1;font-weight:700;border-color:#c0392b;color:#c0392b}
+.empty-cta{display:inline-block;margin-top:8px}
+/* Desktop: one-row nav, menu toggle only on small screens (.btn otherwise forces it visible). */
+body.app-surface .site-header .nav-toggle{display:none!important}
+body.app-surface .site-header .main-nav,body.app-surface .site-header .nav-actions{flex-wrap:nowrap}
+body.app-surface .site-header .nav-actions{margin-left:12px}
+body.app-surface .site-header .user-pill{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Four links fit on phones, so the nav stays visible and wraps instead of collapsing. */
+@media (max-width:760px){body.app-surface .site-header .main-nav{flex-wrap:wrap}}
+body.app-surface .site-header .main-nav a,body.app-surface .site-header .nav-actions .btn{white-space:nowrap}

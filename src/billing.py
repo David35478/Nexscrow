@@ -11,6 +11,9 @@ from src.intents import IntentsError, one_click_client, verify_settlement
 from src.storage import PostgresStore, utcnow
 
 
+PAYMENT_SYMBOLS = {"USDC", "USDT"}
+
+
 class BillingError(ValueError):
     pass
 
@@ -79,6 +82,9 @@ class BillingService:
                 raise ValueError()
             if plan and (not isinstance(offer.get('rollover', False), bool) or not isinstance(offer.get('allowed_agents', ['*']), list) or any(not isinstance(a, str) for a in offer.get('allowed_agents', ['*']))):
                 raise ValueError()
+            limit = offer.get('agent_limit')
+            if plan and limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0):
+                raise ValueError()
             if not plan and price <= 0:
                 raise ValueError()
         except (KeyError, ValueError, InvalidOperation):
@@ -101,7 +107,7 @@ class BillingService:
             raise BillingError('Demo sessions cannot purchase subscriptions or credits')
 
     def assets(self):
-        return self.client.tokens()
+        return [t for t in self.client.tokens() if str(t.get('symbol', '')).upper() in PAYMENT_SYMBOLS]
 
     def _offer(self, purpose, offer_id):
         offer = next((p for p in (self.plans() if purpose == 'subscription' else self.packages()) if p['id'] == offer_id), None)
@@ -179,6 +185,9 @@ class BillingService:
         offer = self._offer(purpose, offer_id)
         if Decimal(str(offer['price_usd'])) <= 0:
             raise BillingError('Use free enrollment for the free plan')
+        if purpose == 'topup':
+            if not self._active(self.store.read('credit_accounts', empty()), user['user_id'], datetime.now(timezone.utc)):
+                raise BillingError('Top-ups are available once you have an active plan. Subscribe to a plan first.')
         if purpose == 'subscription':
             data = self.store.read('credit_accounts', empty())
             active = self._active(data, user['user_id'], datetime.now(timezone.utc))
@@ -190,8 +199,10 @@ class BillingService:
                 future = data.get('subscriptions', {}).get(user['user_id'], {}).get('periods', [])
                 if any(timestamp(p['start_at']) > datetime.now(timezone.utc) for p in future):
                     raise BillingError('Prepaid future periods must be reconciled before changing plans')
-        tokens = self.assets()
+        tokens = self.client.tokens()
         origin = next((t for t in tokens if t['assetId'] == origin_asset), None)
+        if origin and str(origin.get('symbol', '')).upper() not in PAYMENT_SYMBOLS:
+            raise BillingError('Pay with USDC or USDT')
         destination_asset = os.environ.get('BILLING_SETTLEMENT_ASSET')
         dest = next((t for t in tokens if t['assetId'] == destination_asset), None)
         if not origin or not dest:
@@ -414,7 +425,7 @@ class BillingService:
                     if timestamp(period['expires_at']) > now:
                         period['expires_at'] = now.isoformat()
         end = start + timedelta(days=offer['period_days'])
-        period = {'plan': offer['id'], 'name': offer.get('name', offer['id']), 'allowed_agents': offer.get('allowed_agents', ['*']), 'start_at': start.isoformat(), 'expires_at': end.isoformat(), 'price_usd': str(offer['price_usd']), 'credit_reference': reference}
+        period = {'plan': offer['id'], 'name': offer.get('name', offer['id']), 'allowed_agents': offer.get('allowed_agents', ['*']), 'start_at': start.isoformat(), 'expires_at': end.isoformat(), 'price_usd': str(offer['price_usd']), 'agent_limit': offer.get('agent_limit'), 'credit_reference': reference}
         periods.append(period)
         subscription.pop('scheduled_change', None)
         if allocate_credits:

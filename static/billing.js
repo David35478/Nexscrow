@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const date = (value) => value ? new Date(value).toLocaleString() : '—';
   const safe = (value) => value == null ? '' : String(value);
   const state = { plans: [], packages: [], assets: [], enabled: false, checkoutEnabled: false, kind: 'subscription', quote: null, quoteInput: null, order: null, idempotency: null, creating: false, uncertain: false, pollTimer: null };
-  const descriptions = { payments: 'Your subscription and payment history will appear here.', topups: 'Your purchased credit top-ups will appear here.', usage: 'Your credit-funded agent usage will appear here.' };
+  const descriptions = { payments: 'Your subscription and payment history will appear here.', topups: 'Your purchased call top-ups will appear here.', usage: 'Your plan-funded agent calls will appear here.' };
   const status = (id, message, error = false) => { const el = $(id); el.textContent = message; el.classList.toggle('error', error); };
   const option = (select, value, label) => { const el = document.createElement('option'); el.value = value; el.textContent = label; select.append(el); };
   async function request(path, opts) { if (typeof api === 'function') return api(path, opts); const res = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts }); const data = await res.json(); if (!res.ok) throw new Error(data.detail || data.error || res.statusText); return data; }
@@ -14,7 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const name = document.createElement('span'); name.className = 'plan-name'; name.textContent = safe(plan.name); card.append(name);
     const price = document.createElement('div'); price.className = 'plan-price'; price.textContent = money(plan.price_usd);
     const period = document.createElement('small'); period.textContent = ` / ${Number(plan.period_days) || 30} days`; price.append(period); card.append(price);
-    const credits = document.createElement('div'); credits.className = 'plan-credits'; credits.textContent = `${Number(plan.credits) || 0} credits${Number(plan.price_usd) === 0 ? ' · one-time enrollment; no monthly reset' : ` per ${Number(plan.period_days) || 30}-day paid period`}${plan.rollover ? ' · rollover enabled' : ''}`; card.append(credits);
+    const credits = document.createElement('div'); credits.className = 'plan-credits'; credits.textContent = `${plan.agent_limit ? Number(plan.agent_limit) + (Number(plan.agent_limit) === 1 ? " agent" : " agents") : "Unlimited agents"} · ${(Number(plan.credits) || 0).toLocaleString()} calls${Number(plan.price_usd) === 0 ? ' · one-time enrollment' : ` / ${Number(plan.period_days) || 30} days`}${plan.rollover ? ' · rollover enabled' : ''}`; card.append(credits);
     const button = document.createElement('button'); button.type = 'button'; button.className = 'btn btn-primary btn-block';
     const isFree = Number(plan.price_usd) === 0;
     const active = state.subscription;
@@ -40,21 +40,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const [me, credits] = await Promise.all([request('/api/subscription/me'), request('/api/credits/me')]);
     const balance = credits.balance ?? me.balance;
     $('balance').textContent = Number(balance ?? 0).toLocaleString();
-    $('balance-detail').textContent = `${Number(credits.available ?? me.available ?? 0).toLocaleString()} available · ${Number(credits.plan_credits ?? me.plan_credits ?? 0).toLocaleString()} plan · ${Number(credits.topup_credits ?? me.topup_credits ?? 0).toLocaleString()} top-up`;
+    $('balance-detail').textContent = `${Number(credits.available ?? me.available ?? 0).toLocaleString()} available · ${Number(credits.plan_credits ?? me.plan_credits ?? 0).toLocaleString()} plan · ${Number(credits.topup_credits ?? me.topup_credits ?? 0).toLocaleString()} top-up calls`;
     state.checkoutEnabled = Boolean(me.checkout_enabled);
     const sub = me.subscription;
     state.subscription = sub;
+    const topup = $('buy-credits-btn');
+    topup.disabled = !sub; topup.style.opacity = sub ? '' : '0.5'; topup.style.cursor = sub ? '' : 'not-allowed';
+    $('topup-note').hidden = Boolean(sub);
     $('subscription-status').textContent = sub ? safe(sub.status || 'Active') : 'No active plan';
-    $('subscription-detail').textContent = sub ? `${safe(sub.plan_name || sub.name || sub.plan_id)} · ${safe(sub.status || 'active')}` : 'Choose a plan to get a credit allocation and access eligible agents.';
+    $('subscription-detail').textContent = sub ? `${safe(sub.plan_name || sub.name || sub.plan_id)} · ${safe(sub.status || 'active')}` : 'Choose a plan to get a monthly call allowance and access eligible agents.';
     $('subscription-extra').textContent = sub ? `Starts ${date(sub.starts_at || sub.start_at)} · expires ${date(sub.expires_at || sub.end_at)}. Paid renewals require a new payment; no automatic crypto charges.` : 'No subscription yet';
     const scheduled = me.scheduled_change || sub?.scheduled_change;
     if (scheduled) $('subscription-extra').textContent += ` Scheduled change to ${safe(scheduled.plan_id)} effective ${date(scheduled.effective_at)}${scheduled.requires_payment ? '; requires a new payment after expiry' : ''}.`;
     const futurePeriods = me.scheduled_subscriptions || [];
-    if (futurePeriods.length) $('subscription-extra').textContent += ` Prepaid future periods: ${futurePeriods.map(period => `${safe(period.name || period.plan)} (${date(period.start_at)}–${date(period.expires_at)})`).join('; ')}. These credits are unavailable until their period starts.`;
+    if (futurePeriods.length) $('subscription-extra').textContent += ` Prepaid future periods: ${futurePeriods.map(period => `${safe(period.name || period.plan)} (${date(period.start_at)}–${date(period.expires_at)})`).join('; ')}. These calls are unavailable until their period starts.`;
     const frozen = Boolean(me.frozen ?? credits.frozen);
     if (frozen) {
       const warning = document.createElement('p'); warning.className = 'billing-notice'; warning.setAttribute('role', 'alert');
-      warning.textContent = `Account restricted for payment reconciliation${me.freeze_reason || credits.freeze_reason ? `: ${safe(me.freeze_reason || credits.freeze_reason)}` : '.'} Credit-funded activity may be unavailable while this is reviewed.`;
+      warning.textContent = `Account restricted for payment reconciliation${me.freeze_reason || credits.freeze_reason ? `: ${safe(me.freeze_reason || credits.freeze_reason)}` : '.'} Plan-funded calls may be unavailable while this is reviewed.`;
       $('subscription-extra').append(document.createElement('br'), warning);
     }
   }
@@ -83,6 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
     network.addEventListener('change', update); update();
   }
   function openCheckout(kind, id) {
+    if (kind === 'topup' && !state.subscription) { status('checkout-status', 'Top-ups are available once you have an active plan.'); return; }
     if (state.uncertain) {
       status('checkout-status', 'Resolve the previous payment request using its original details before starting another.');
       if (!$('checkout-dialog').open) $('checkout-dialog').showModal();
@@ -92,10 +96,10 @@ document.addEventListener('DOMContentLoaded', () => {
     clearTimeout(state.pollTimer);
     ['checkout-package', 'checkout-network', 'checkout-token', 'refund-address'].forEach(id => $(id).disabled = false);
     state.kind = kind; state.quote = null; state.quoteInput = null; state.order = null;
-    $('checkout-title').textContent = kind === 'subscription' ? 'Subscribe or renew' : 'Top up credits';
+    $('checkout-title').textContent = kind === 'subscription' ? 'Subscribe or renew' : 'Top up agent calls';
     const select = $('checkout-package'); select.replaceChildren();
     const records = kind === 'subscription' ? state.plans.filter(x => Number(x.price_usd) > 0) : state.packages;
-    records.forEach(item => option(select, item.id, `${item.name || item.id} — ${money(item.price_usd)}, ${Number(item.credits) || 0} credits`));
+    records.forEach(item => option(select, item.id, `${item.name || item.id} — ${money(item.price_usd)}, ${Number(item.credits) || 0} calls`));
     if (id) select.value = id;
     $('quote-details').hidden = true; $('confirm-payment').checked = false; $('create-payment').disabled = true;
     $('quote-button').disabled = !state.enabled || !state.checkoutEnabled;
@@ -120,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
   function showQuote(record) {
     state.quote = record; const quote = record.quote_response?.quote || record.quote || {};
     const fields = [
-      ['USD price', money(record.price_usd)], ['Credits', record.credits], ['Deposit amount', quote.amountInFormatted || quote.amountIn],
+      ['USD price', money(record.price_usd)], ['Agent calls', record.credits], ['Deposit amount', quote.amountInFormatted || quote.amountIn],
       ['Input amount (USD)', quote.amountInUsd], ['Settlement amount (USD)', quote.amountOutUsd],
       ['Deposit address', quote.depositAddress || record.deposit_address], ['Memo', quote.depositMemo || record.deposit_memo],
       ['Quote expires', quote.deadline || record.quote_expires_at], ['Estimated time', quote.timeEstimate],
@@ -134,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('confirm-payment').closest('label').hidden = !preview;
     $('create-payment').hidden = !preview;
     $('confirm-payment').checked = false; $('create-payment').disabled = true;
-    status('checkout-status', preview ? 'Review quote, amount, destination, fees, and expiry before creating a payment.' : `Payment order ${safe(record.payment_id || record.id)} created. Credits are added only after verified settlement.`);
+    status('checkout-status', preview ? 'Review quote, amount, destination, fees, and expiry before creating a payment.' : `Payment order ${safe(record.payment_id || record.id)} created. Calls are added only after verified settlement.`);
   }
   $('confirm-payment').addEventListener('change', () => { $('create-payment').disabled = !state.quote || !state.quote.dry || !$('confirm-payment').checked; });
   $('quote-button').addEventListener('click', async () => {
@@ -179,10 +183,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusText = statusKey === 'review_after_settlement'
           ? 'Settlement requires operator reconciliation. The account may be restricted; existing credits have not been silently reversed.'
           : ['underpaid', 'expired', 'refunded', 'review', 'quarantined', 'failed', 'unknown'].includes(statusKey)
-            ? `Payment ${label}. Credits have not been added. Contact support if you sent funds.`
+            ? `Payment ${label}. Calls have not been added. Contact support if you sent funds.`
             : ['paid', 'completed', 'settled', 'success', 'succeeded'].includes(statusKey)
-              ? 'Payment verified. Credit balance will reflect the completed settlement.' : `Payment ${label}; waiting for verified settlement.`;
+              ? (order.purpose === 'topup' ? 'Top-up added ✓' : 'Plan active ✓')
+              : ['deposit_detected', 'processing'].includes(statusKey) ? 'Payment detected — confirming…' : 'Waiting for your payment…';
         status('checkout-status', statusText); await loadAccount(); await loadHistory('payments');
+        if (['paid', 'completed', 'settled', 'success', 'succeeded'].includes(statusKey)) { $('plans-grid').replaceChildren(); state.plans.forEach(displayPlan); status('plan-status', statusText); }
         if (['paid', 'completed', 'settled', 'success', 'succeeded', 'failed', 'expired', 'refunded', 'underpaid', 'review', 'review_after_settlement', 'unknown', 'quarantined'].includes(label.toLowerCase())) return;
       } catch (error) { status('checkout-status', `Could not refresh payment status: ${error.message}`, true); }
       state.pollTimer = setTimeout(poll, 5000);
@@ -198,7 +204,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = document.createElement('tr');
         const values = kind !== 'usage'
           ? [date(entry.created_at), `${safe(entry.purpose)}${entry.plan_id ? ` · ${safe(entry.plan_id)}` : ''}`, money(entry.price_usd), safe(entry.status)]
-          : [date(entry.created_at), safe(entry.description || entry.type), `${Number(entry.delta ?? entry.amount) > 0 ? '+' : ''}${safe(entry.delta ?? entry.amount)} credits`, safe(entry.status || entry.type)];
+          : [date(entry.created_at), safe(entry.description || entry.type), `${Number(entry.delta ?? entry.amount) > 0 ? '+' : ''}${safe(entry.delta ?? entry.amount)} calls`, safe(entry.status || entry.type)];
         values.forEach(value => { const cell = document.createElement('td'); cell.textContent = value; row.append(cell); });
         if (kind !== 'usage' && entry.payment_id && !['paid', 'expired', 'refunded', 'failed', 'review', 'review_after_settlement', 'unknown'].includes(String(entry.status).toLowerCase())) {
           const cell = document.createElement('td'); const check = document.createElement('button'); check.type = 'button'; check.className = 'btn btn-secondary'; check.textContent = 'Check status';

@@ -2,3 +2,5 @@
 @media(max-width:850px){.portal-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:600px){.management{padding-top:26px}.management-heading{display:block}.secure-pill{display:inline-block;margin-top:16px}.portal-form.two-col{grid-template-columns:1fr}.portal-grid{gap:9px}.portal-card{padding:15px}.metric-value{font-size:21px}.portal-tab{padding:12px 10px}}
 
 .management [hidden]{display:none!important}
+
+.admin-login{max-width:460px}.admin-login-card h1{margin:5px 0 18px}.admin-login-card .muted{margin-top:18px}

@@ -143,13 +143,14 @@ class CreditService:
                 "plan_credits": plan, "topup_credits": topup, "scheduled_plan_credits": future}
 
     def grant(self, user_id: str, amount: int, reference: str, plan: str,
-              allowed_agents: list[str], expires_at: str | None = None) -> dict:
+              allowed_agents: list[str], expires_at: str | None = None,
+              agent_limit: int | None = None) -> dict:
         if not user_id or not reference or not plan or not isinstance(allowed_agents, list):
             raise CreditError("user_id, reference, plan, and allowed_agents are required")
         def mutate(data):
             entry = grant_in_state(data, user_id, amount, reference, "plan", expires_at)
             data["subscriptions"][user_id] = {"plan": plan, "allowed_agents": list(allowed_agents),
-                                               "expires_at": expires_at}
+                                               "expires_at": expires_at, "agent_limit": agent_limit}
             return entry
         return self._update(mutate)
 
@@ -163,8 +164,12 @@ class CreditService:
         if valid and sub.get("expires_at"):
             valid = _date(sub["expires_at"]) > _now()
         allowed = bool(valid and not view['frozen'] and ("*" in sub["allowed_agents"] or agent_id in sub["allowed_agents"]))
+        limit = sub.get("agent_limit") if sub else None
+        used = list(sub.get("agents_used") or []) if sub else []
+        if allowed and limit is not None and agent_id not in used and len(used) >= limit:
+            allowed = False
         return {"allowed": allowed, "balance": view["balance"], "available": view["available"],
-                "plan": sub.get("plan") if sub else None}
+                "plan": sub.get("plan") if sub else None, "agent_limit": limit, "agents_used": len(used)}
 
     @staticmethod
     def _active_subscription(subscription: dict | None, now: datetime | None = None) -> dict | None:
@@ -199,6 +204,12 @@ class CreditService:
             sub = self._active_subscription(data["subscriptions"].get(user_id))
             if not sub or (sub.get("expires_at") and _date(sub["expires_at"]) <= _now()) or not ("*" in sub["allowed_agents"] or agent_id in sub["allowed_agents"]):
                 raise CreditError("subscription does not permit this agent")
+            used = sub.setdefault("agents_used", [])
+            limit = sub.get("agent_limit")
+            if agent_id not in used:
+                if limit is not None and len(used) >= limit:
+                    raise CreditError(f"Your plan allows {limit} different agents per period")
+                used.append(agent_id)
             view = self._view(data, user_id)
             if view["available"] < amount:
                 raise CreditError("insufficient credits")

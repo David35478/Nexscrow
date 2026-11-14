@@ -15,6 +15,9 @@ class ManagementError(ValueError):
 
 def is_admin(user):
     identities = {value.strip() for value in os.environ.get('NEXSCROW_ADMIN_USER_IDS', '').split(',') if value.strip()}
+    if user and user.get('provider') == 'admin':
+        from src import admin_auth
+        return bool(admin_auth.configured() and user['user_id'] == admin_auth.admin_user_id())
     return bool(user and user.get('provider') != 'demo' and user['user_id'] in identities)
 
 

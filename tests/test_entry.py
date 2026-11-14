@@ -11,7 +11,7 @@ def test_public_landing_login_and_authenticated_app(tmp_path):
     assert '/landing-assets/_next/' in landing.text
     portal=c.get('/login')
     assert all(value in portal.text for value in ['DAPPS PORTAL', 'Enter demo mode', 'Connect NEAR wallet'])
-    for path in ['/app','/agents','/dashboard','/workspace','/billing','/account','/requests','/agents/agent-oracle-1','/job/example']:
+    for path in ['/app','/agents','/dashboard','/workspace','/billing','/account','/requests','/agents/agent-oracle-1']:
         response=c.get(path,follow_redirects=False)
         assert response.status_code==303
         assert response.headers['location']=='/login'

@@ -9,7 +9,7 @@ from src.storage import JsonStore, utcnow
 
 
 STATUSES = ("open", "accepted", "delivered", "completed", "expired", "cancelled")
-PAYMENT_STATUSES = ("pending", "locked", "released", "refunded")
+PAYMENT_STATUSES = ("pending", "locked", "release_pending", "released", "refunded")
 
 
 class JobNotFound(Exception):

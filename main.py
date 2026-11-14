@@ -33,6 +33,7 @@ from fastapi.responses import FileResponse
 from src.billing import BillingService, BillingError
 from src.intents import IntentsError
 from src.customer import CustomerService
+from src.deals import DealService, DealError
 from src.management import ManagementService, ManagementError, is_admin
 
 
@@ -52,6 +53,12 @@ class JobCreate(BaseModel):
     release_condition: str = Field(default="manual", pattern="^(manual|auto)$")
     provider_inputs: dict | None = None
     external_agent_id: str | None = None
+
+
+class AdminLoginBody(BaseModel):
+    model_config = {'extra': 'forbid'}
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=256)
 
 
 class AgentAction(BaseModel):
@@ -224,10 +231,22 @@ def create_app(
     app.state.system = system
     @app.middleware('http')
     async def app_entry_portal(request: Request, call_next):
-        private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer'}
-        is_app_page = request.method == 'GET' and (request.url.path in private_pages or request.url.path.startswith(('/agents/', '/job/')))
-        if is_app_page and not app.state.auth.get_user(request.cookies.get(SESSION_COOKIE)):
-            return RedirectResponse('/login', status_code=303)
+        private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer', '/deals'}
+        path = request.url.path
+        is_app_page = request.method == 'GET' and (path in private_pages or path.startswith(('/agents/', '/deals/')))
+        signed_in = is_app_page and app.state.auth.get_user(request.cookies.get(SESSION_COOKIE))
+        if is_app_page and not signed_in:
+            response = RedirectResponse('/login', status_code=303)
+            if path.startswith('/deals/'):
+                # Every sign-in method lands on /app; return invitees to their deal link afterwards.
+                target = path + ('?' + request.url.query if request.url.query else '')
+                response.set_cookie('nx_next', target, max_age=900, httponly=True, samesite='lax', secure=request.url.scheme == 'https')
+            return response
+        next_path = request.cookies.get('nx_next', '')
+        if signed_in and path == '/app' and next_path.startswith('/deals/'):
+            response = RedirectResponse(next_path, status_code=303)
+            response.delete_cookie('nx_next')
+            return response
         return await call_next(request)
     from src.security import install_security
     install_security(app, system.store)
@@ -286,9 +305,17 @@ def create_app(
             raise HTTPException(403, 'Administrator access required')
         return user
 
+    @app.get('/admin/login')
+    async def admin_login_page(request: Request):
+        if is_admin(current_user(request)):
+            return RedirectResponse('/admin', status_code=303)
+        return templates.TemplateResponse(request=request, name='admin_login.html', context={})
+
     @app.get('/admin')
     async def admin_portal(request: Request):
-        user = require_admin(request)
+        user = current_user(request)
+        if not is_admin(user):
+            return RedirectResponse('/admin/login', status_code=303)
         return templates.TemplateResponse(request=request, name='management.html', context={'mode': 'admin', 'user': user})
 
     @app.get('/developer')
@@ -377,12 +404,85 @@ def create_app(
             raise HTTPException(503, 'Production origin is not configured')
         return configured.rstrip('/') if configured else f"{proto}://{host}"
 
+    # ---- person-to-person escrow (side feature) ----
+    deal_service = DealService(system.store)
+
+    def _deal_call(fn, *args):
+        try:
+            return fn(*args)
+        except DealError as exc:
+            raise HTTPException(exc.status, str(exc))
+
+    async def _json_body(request: Request) -> dict:
+        try:
+            body = await request.json()
+        except Exception:
+            return {}
+        return body if isinstance(body, dict) else {}
+
+    @app.post('/api/deals')
+    async def deals_create(request: Request):
+        user = require_user(request)
+        body = await _json_body(request)
+        return _deal_call(deal_service.create, user, body.get('title'), body.get('description', ''), body.get('amount_usd'), body.get('seller_account'))
+
+    @app.get('/api/deals')
+    def deals_list(request: Request):
+        return {'deals': deal_service.list_for(require_user(request))}
+
+    @app.get('/api/deals/{deal_id}')
+    def deals_get(deal_id: str, request: Request):
+        return _deal_call(deal_service.get, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/join')
+    async def deals_join(deal_id: str, request: Request):
+        user = require_user(request)
+        token = (await _json_body(request)).get('token')
+        return _deal_call(deal_service.join, user, deal_id, token if isinstance(token, str) else '')
+
+    @app.post('/api/deals/{deal_id}/fund')
+    def deals_fund(deal_id: str, request: Request):
+        return _deal_call(deal_service.fund, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/confirm')
+    def deals_confirm(deal_id: str, request: Request):
+        return _deal_call(deal_service.confirm, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/cancel')
+    def deals_cancel(deal_id: str, request: Request):
+        return _deal_call(deal_service.cancel, require_user(request), deal_id)
+
+    @app.post('/api/deals/{deal_id}/dispute')
+    async def deals_dispute(deal_id: str, request: Request):
+        user = require_user(request)
+        reason = (await _json_body(request)).get('reason', '')
+        return _deal_call(deal_service.dispute, user, deal_id, reason if isinstance(reason, str) else '')
+
+    @app.post('/api/admin/deals/{deal_id}/resolve')
+    async def deals_resolve(deal_id: str, request: Request):
+        require_admin(request)
+        return _deal_call(deal_service.resolve, deal_id, (await _json_body(request)).get('outcome'))
+
+    @app.get('/deals')
+    async def deals_page(request: Request):
+        return templates.TemplateResponse(request=request, name='deals.html', context={'user': current_user(request)})
+
+    @app.get('/deals/{deal_id}')
+    async def deal_detail_page(deal_id: str, request: Request, token: str | None = None):
+        user = current_user(request)
+        if not user:
+            return RedirectResponse('/login', status_code=303)
+        if not deal_service.peek(user, deal_id, token):
+            raise HTTPException(404, 'deal not found')
+        return templates.TemplateResponse(request=request, name='deal_detail.html', context={'user': user, 'deal_id': deal_id, 'token': token or ''})
+
     @app.get('/account')
     async def customer_dashboard(request: Request):
         return templates.TemplateResponse(request=request, name='customer_dashboard.html', context={'user': current_user(request)})
 
     @app.get('/api/customer/dashboard')
     def customer_data(request: Request):
+        system.settle_due_releases()
         return customer_service.dashboard(require_user(request))
 
     @app.get('/api/account/settings')
@@ -546,7 +646,7 @@ def create_app(
     @app.get("/job/{job_id}")
     async def job_page(request: Request, job_id: str):
         try:
-            system.jobs.get(job_id)
+            job = system.jobs.get(job_id)
         except JobNotFound:
             raise HTTPException(status_code=404, detail="job not found")
         view = system.public_view()
@@ -554,7 +654,12 @@ def create_app(
         return templates.TemplateResponse(
             request=request,
             name="job_detail.html",
-            context={"view": view, "job_id": job_id},
+            context={
+                "view": view,
+                "job_id": job_id,
+                "proof_hash": job.get("proof_hash"),
+                "explorer_url": near_network.TESTNET.explorer_url,
+            },
         )
 
     @app.get("/near-callback")
@@ -588,6 +693,17 @@ def create_app(
     @app.post("/api/auth/demo")
     async def auth_demo(request: Request) -> dict:
         user = auth.demo_login()
+        token = auth.create_session(user["provider"], user["user_id"], user["name"])
+        response = JSONResponse(content={"user": user})
+        response.set_cookie(
+            SESSION_COOKIE, token, httponly=True, secure=os.environ.get("APP_ENV") == "production", samesite="lax", max_age=24 * 3600
+        )
+        return response
+
+    @app.post("/api/auth/admin/login")
+    async def auth_admin_login(body: AdminLoginBody) -> dict:
+        from src import admin_auth
+        user = admin_auth.authenticate(body.email, body.password)
         token = auth.create_session(user["provider"], user["user_id"], user["name"])
         response = JSONResponse(content={"user": user})
         response.set_cookie(
@@ -720,8 +836,27 @@ def create_app(
         return view
 
     @app.get("/api/jobs")
-    async def list_jobs() -> dict:
-        return system.board()
+    async def list_jobs(request: Request) -> dict:
+        board = system.board()
+        user = current_user(request)
+        uid = user["user_id"] if user else None
+
+        def view(j):
+            return system.public_job(j, owner=bool(uid and j.get("client_id") == uid))
+
+        return {k: ([view(j) for j in v] if isinstance(v, list) else v) for k, v in board.items()}
+
+    @app.post("/api/admin/escrow/settle-due")
+    async def settle_due(request: Request) -> dict:
+        require_admin(request)
+        return system.settle_due_releases()
+
+    @app.get("/api/cron/settle-due")
+    async def cron_settle_due(request: Request) -> dict:
+        secret = os.environ.get("CRON_SECRET")
+        if not secret or request.headers.get("authorization") != f"Bearer {secret}":
+            raise HTTPException(401, "cron secret required")
+        return system.settle_due_releases()
 
     @app.post("/api/jobs")
     async def create_job(body: JobCreate, request: Request) -> dict:
@@ -759,9 +894,12 @@ def create_app(
         return system.approve_work(job_id, client_id=user["user_id"])
 
     @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str) -> dict:
+    async def get_job(job_id: str, request: Request) -> dict:
         system.expire_jobs()
-        return system.jobs.get(job_id)
+        job = system.jobs.get(job_id)
+        user = current_user(request)
+        owner = bool(user and job.get("client_id") and job["client_id"] == user["user_id"])
+        return system.public_job(job, owner=owner)
 
     @app.post("/api/jobs/{job_id}/deposit/approve")
     async def approve_deposit(job_id: str, request: Request) -> dict:

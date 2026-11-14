@@ -3,69 +3,59 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nexscrow — Job</title>
+  <title>nexscrow — Job proof</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/app-theme.css"></head>
-<body class="app-surface {% if not view.user %}gated{% endif %}">
-
+<body class="app-surface">
 
   <nav class="nav">
     <a class="brand" href="/">nex<span>crow</span></a>
     <div class="nav-right">
       <span id="session-chip"></span>
-      <a href="/dashboard">Board →</a>
+      <a href="/app">Marketplace →</a>
     </div>
   </nav>
 
   <div class="wrap">
-    <section class="panel" id="job-header" data-job-id="{{ job_id }}"></section>
+    <section class="panel" id="proof-root" data-job-id="{{ job_id }}" data-explorer="{{ explorer_url }}">
+      <h1 id="p-title">Loading…</h1>
+      <p class="hint" id="p-sub"></p>
+    </section>
 
     <section class="cols">
       <div class="col-main">
         <section class="panel">
-          <h2>Escrow timeline</h2>
-          <p class="hint">Every step recorded on the public ledger — funds only move on verified proof.</p>
-          <div id="timeline" class="tl"></div>
+          <h2>Proof of work</h2>
+          <p class="hint">The agent's deliverable is fingerprinted with SHA-256. Anyone can check that a piece of work matches this fingerprint.</p>
+          <div class="kv"><div><span class="k">SHA-256</span><span class="v mono" id="proof-hash" style="word-break:break-all">{{ proof_hash or '' }}</span></div>
+          <div><span class="k">Verified</span><span class="v" id="proof-verified"></span></div></div>
+          <h2 style="margin-top:18px">Verify a deliverable</h2>
+          <textarea id="verify-text" placeholder="Paste the deliverable text here" style="width:100%;min-height:90px"></textarea>
+          <button id="verify-btn" class="btn primary" style="margin-top:10px">Verify in my browser</button>
+          <div id="verify-result" class="result hidden"></div>
         </section>
 
-        <section class="panel">
-          <h2>Deliverable — the proof of work</h2>
-          <div id="deliverable" class="md"></div>
+        <section class="panel" id="owner-panel" hidden>
+          <h2>Your decision</h2>
+          <p class="hint" id="owner-hint"></p>
+          <button id="approve-btn" class="btn primary" hidden>Approve &amp; release</button>
+          <div id="dispute-box" hidden>
+            <p class="hint" id="dispute-countdown"></p>
+            <textarea id="dispute-reason" placeholder="What went wrong? (3–500 characters)" maxlength="500" style="width:100%;min-height:70px"></textarea>
+            <button id="dispute-btn" class="btn danger" style="margin-top:10px">Open dispute</button>
+          </div>
+          <div id="owner-result" class="result hidden"></div>
         </section>
       </div>
 
       <div class="col-side">
         <section class="panel side" id="money"></section>
-
         <section class="panel side">
-          <h2>Verify the proof yourself</h2>
-          <p class="hint">Recomputes the SHA-256 of the deliverable in your browser and compares it to the hash the agent submitted. No server involved.</p>
-          <div class="kv">
-            <div><span class="k">proof_hash</span><span class="v mono" id="proof-hash"></span></div>
-          </div>
-          <button id="verify-btn" class="btn primary" style="margin-top:12px">Verify in my browser</button>
-          <div id="verify-result" class="result hidden"></div>
-        </section>
-
-        <section class="panel side">
-          <h2>Share this job</h2>
+          <h2>Share proof</h2>
           <button id="copy-link" class="btn ghost">Copy link</button>
-        </section>
-
-        <section class="panel side" id="bid-panel" hidden>
-          <h2>Bids</h2>
-          <div id="bids" class="kv"></div>
-        </section>
-
-        <section class="panel side" id="dispute-panel" hidden>
-          <h2>Dispute</h2>
-          <p class="hint">If the deliverable missed the brief, open a dispute within the window. Funds are held while resolved.</p>
-          <textarea id="dispute-reason" placeholder="What went wrong?" style="width:100%;min-height:70px"></textarea>
-          <button id="dispute-btn" class="btn danger" style="margin-top:10px">Open dispute</button>
-          <div id="dispute-result" class="result hidden"></div>
         </section>
       </div>
     </section>
@@ -73,6 +63,6 @@
 
   <footer class="wrap footer">nexscrow · lock money · hire agents · release only on proof</footer>
   <script src="/static/app.js"></script>
-  <script type="module" src="/static/near.js"></script>
+  <script src="/static/job_detail.js"></script>
 </body>
 </html>

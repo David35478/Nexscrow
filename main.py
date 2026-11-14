@@ -54,6 +54,12 @@ class JobCreate(BaseModel):
     external_agent_id: str | None = None
 
 
+class AdminLoginBody(BaseModel):
+    model_config = {'extra': 'forbid'}
+    email: str = Field(max_length=254)
+    password: str = Field(max_length=256)
+
+
 class AgentAction(BaseModel):
     agent_id: str
 
@@ -225,7 +231,7 @@ def create_app(
     @app.middleware('http')
     async def app_entry_portal(request: Request, call_next):
         private_pages = {'/app', '/agents', '/dashboard', '/account', '/workspace', '/requests', '/billing', '/developer'}
-        is_app_page = request.method == 'GET' and (request.url.path in private_pages or request.url.path.startswith(('/agents/', '/job/')))
+        is_app_page = request.method == 'GET' and (request.url.path in private_pages or request.url.path.startswith('/agents/'))
         if is_app_page and not app.state.auth.get_user(request.cookies.get(SESSION_COOKIE)):
             return RedirectResponse('/login', status_code=303)
         return await call_next(request)
@@ -286,9 +292,17 @@ def create_app(
             raise HTTPException(403, 'Administrator access required')
         return user
 
+    @app.get('/admin/login')
+    async def admin_login_page(request: Request):
+        if is_admin(current_user(request)):
+            return RedirectResponse('/admin', status_code=303)
+        return templates.TemplateResponse(request=request, name='admin_login.html', context={})
+
     @app.get('/admin')
     async def admin_portal(request: Request):
-        user = require_admin(request)
+        user = current_user(request)
+        if not is_admin(user):
+            return RedirectResponse('/admin/login', status_code=303)
         return templates.TemplateResponse(request=request, name='management.html', context={'mode': 'admin', 'user': user})
 
     @app.get('/developer')
@@ -546,7 +560,7 @@ def create_app(
     @app.get("/job/{job_id}")
     async def job_page(request: Request, job_id: str):
         try:
-            system.jobs.get(job_id)
+            job = system.jobs.get(job_id)
         except JobNotFound:
             raise HTTPException(status_code=404, detail="job not found")
         view = system.public_view()
@@ -554,7 +568,12 @@ def create_app(
         return templates.TemplateResponse(
             request=request,
             name="job_detail.html",
-            context={"view": view, "job_id": job_id},
+            context={
+                "view": view,
+                "job_id": job_id,
+                "proof_hash": job.get("proof_hash"),
+                "explorer_url": near_network.TESTNET.explorer_url,
+            },
         )
 
     @app.get("/near-callback")
@@ -588,6 +607,17 @@ def create_app(
     @app.post("/api/auth/demo")
     async def auth_demo(request: Request) -> dict:
         user = auth.demo_login()
+        token = auth.create_session(user["provider"], user["user_id"], user["name"])
+        response = JSONResponse(content={"user": user})
+        response.set_cookie(
+            SESSION_COOKIE, token, httponly=True, secure=os.environ.get("APP_ENV") == "production", samesite="lax", max_age=24 * 3600
+        )
+        return response
+
+    @app.post("/api/auth/admin/login")
+    async def auth_admin_login(body: AdminLoginBody) -> dict:
+        from src import admin_auth
+        user = admin_auth.authenticate(body.email, body.password)
         token = auth.create_session(user["provider"], user["user_id"], user["name"])
         response = JSONResponse(content={"user": user})
         response.set_cookie(
@@ -759,9 +789,12 @@ def create_app(
         return system.approve_work(job_id, client_id=user["user_id"])
 
     @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str) -> dict:
+    async def get_job(job_id: str, request: Request) -> dict:
         system.expire_jobs()
-        return system.jobs.get(job_id)
+        job = system.jobs.get(job_id)
+        user = current_user(request)
+        owner = bool(user and job.get("client_id") and job["client_id"] == user["user_id"])
+        return system.public_job(job, owner=owner)
 
     @app.post("/api/jobs/{job_id}/deposit/approve")
     async def approve_deposit(job_id: str, request: Request) -> dict:

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Admin portal — Nexscrow</title><meta name="robots" content="noindex"><link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet"><link rel="stylesheet" href="/static/style.css"><link rel="stylesheet" href="/static/management.css"><link rel="stylesheet" href="/static/app-theme.css"></head>
+<body class="app-surface"><main class="container management admin-login">
+<section class="portal-card admin-login-card"><p class="eyebrow">NEXSCROW · OPERATIONS</p><h1>Admin portal</h1>
+<form id="admin-login-form" class="portal-form" novalidate>
+<div class="portal-field"><label for="admin-email">Email</label><input id="admin-email" name="email" type="email" autocomplete="username" maxlength="254" required></div>
+<div class="portal-field"><label for="admin-password">Password</label><input id="admin-password" name="password" type="password" autocomplete="current-password" maxlength="256" required></div>
+<div id="admin-login-error" class="portal-notice error" role="alert" hidden></div>
+<button class="portal-button primary" type="submit" id="admin-login-submit">Sign in</button>
+</form>
+<p class="muted">Admins only. Customers sign in from the main portal. <a href="/login">Go to customer sign-in</a></p>
+</section></main>
+<script src="/static/admin_login.js" defer></script></body></html>

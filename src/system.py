@@ -275,6 +275,20 @@ class NexscrowSystem:
         self.ledger.append("dispute_resolved", job_id=job_id, details=ledger_note)
         return self.jobs.get(job_id)
 
+    @staticmethod
+    def public_job(job: dict, owner: bool = False) -> dict:
+        """Anonymous-safe job view: allowlisted proof fields only; owners get everything."""
+        if owner:
+            return job
+        keys = (
+            "job_id", "title", "status", "payment_status", "reward_usd", "agent",
+            "proof_hash", "proof_submitted_at", "simulated", "fee_usd",
+            "agent_payout_usd", "deposit_tx_hash", "payout_tx_hash", "refund_tx_hash",
+            "dispute_window_minutes", "disputed", "dispute_resolved",
+            "created_at", "completed_at",
+        )
+        return {k: job.get(k) for k in keys}
+
     def reputation(self, agent_id: str | None = None) -> dict:
         if agent_id:
             return agent_stats(self.jobs, agent_id)

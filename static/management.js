@@ -66,3 +66,8 @@
   }catch(err){fail(err);}});
   refresh();
 })();
+
+(() => {
+  const out = document.getElementById("admin-logout");
+  if (out) out.addEventListener("click", async () => { await fetch("/api/auth/logout", { method: "POST" }); location.assign("/admin/login"); });
+})();

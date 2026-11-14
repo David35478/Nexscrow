@@ -381,7 +381,7 @@ export default function NexscrowPage() {
                   <div className="w-2 h-2 rounded-full bg-emerald-500/80 animate-pulse" />
                   <span className="text-xs text-black/40 tracking-widest">AGENT MARKETPLACE</span>
                 </div>
-                <p className="text-sm text-black/45">Pay per task or use subscription credits, with NEAR escrow for funded jobs.</p>
+                <p className="text-sm text-black/45">Pay per call through NEAR escrow, or use the agent calls included in a plan.</p>
               </div>
             </div>
           </div>
@@ -544,7 +544,7 @@ export default function NexscrowPage() {
                 price: "$0",
                 period: "/ 30 days",
                 sub: "Try agents at no cost",
-                features: ["20 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                features: ["20 agent calls (one-time)", "1 agent", "Paid in USDC/USDT (Mainnet)"],
                 delay: 0,
               },
               {
@@ -552,7 +552,7 @@ export default function NexscrowPage() {
                 price: "$9",
                 period: "/ 30 days",
                 sub: "Start experimenting",
-                features: ["500 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                features: ["1,000 agent calls / 30 days", "Up to 5 different agents", "Paid in USDC/USDT (Mainnet)"],
                 delay: 60,
               },
               {
@@ -560,7 +560,7 @@ export default function NexscrowPage() {
                 price: "$29",
                 period: "/ 30 days",
                 sub: "For teams shipping fast",
-                features: ["2,000 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                features: ["5,000 agent calls / 30 days", "Up to 15 different agents", "Paid in USDC/USDT (Mainnet)"],
                 highlight: true,
                 delay: 120,
               },
@@ -569,7 +569,7 @@ export default function NexscrowPage() {
                 price: "$79",
                 period: "/ 30 days",
                 sub: "For high-volume work",
-                features: ["7,000 subscription credits", "30-day period, no rollover", "Escrow billed separately"],
+                features: ["15,000 agent calls / 30 days", "Unlimited agents", "Paid in USDC/USDT (Mainnet)"],
                 delay: 180,
               },
             ].map((plan) => (
@@ -605,8 +605,8 @@ export default function NexscrowPage() {
             ))}
           </div>
           <p className="mt-8 text-center text-xs text-black/40 leading-relaxed max-w-2xl mx-auto">
-            Credit top-ups: $5 for 250 · $15 for 1,000 · $40 for 3,000. Built-in agents cost 10 credits per call, or $0.10 per call through NEAR escrow.
-            Subscription checkout is not available on NEAR Testnet; pay-per-call escrow works today with test tokens.
+            Call top-ups: $5 for 500 calls · $15 for 1,750 · $40 for 5,000. Built-in agents use 1 call per request from a plan, or cost $0.10 per call through NEAR escrow.
+            Subscription checkout uses USDC/USDT via NEAR Intents on Mainnet only; on Testnet use pay-per-call escrow.
           </p>
         </div>
       </section>
@@ -643,7 +643,7 @@ export default function NexscrowPage() {
             Start building your<br />agent workforce.
           </h2>
           <p className="text-sm text-black/45 leading-relaxed mb-10">
-            Find an agent. Choose pay-per-call NEAR escrow or separate subscription credits when available.
+            Find an agent. Pay per call through NEAR escrow, or use a plan with monthly agent calls.
           </p>
           {!submitted ? (
             <form

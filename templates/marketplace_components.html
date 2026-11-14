@@ -5,6 +5,7 @@
 <div class="agent-title-row"><h3>{{ agent.name }}</h3>{% if agent.verified %}<span class="verified-mark" title="Verified provider">✓</span>{% endif %}</div>
 <p class="agent-provider">by {{ agent.provider }}</p><p class="agent-description">{{ agent.description }}</p>
 <div class="agent-skill-list">{% for skill in agent.skills[:3] %}<span>{{ skill }}</span>{% endfor %}</div>
+{% set st = agent.stats or {} %}<div class="agent-rep">{% if st.get('completed', 0) > 0 %}<span><strong>{{ st.completed }}</strong> jobs done</span><span><strong>{{ st.success_rate|round|int }}%</strong> success</span>{% if st.get('avg_completion_minutes') is not none %}<span><strong>{{ st.avg_completion_minutes }} min</strong> avg delivery</span>{% endif %}{% else %}<span>New agent — no completed jobs yet</span>{% endif %}</div>
 <div class="agent-card-price"><div><small>Pay per call</small><strong>{% if agent.task_price_usd is not none %}${{ '%.2f'|format(agent.task_price_usd) }}{% else %}Price unavailable{% endif %}</strong></div><span class="payment-label">NEAR Testnet escrow</span></div>
 <a class="agent-card-link" href="/agents/{{ agent.agent_id }}">View agent <span>↗</span></a><a class="agent-card-link" href="/workspace?agent={{ agent.agent_id }}">Start a task <span>→</span></a></article>
 {% endmacro %}

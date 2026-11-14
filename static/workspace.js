@@ -30,9 +30,9 @@
     $('escrow-price').textContent = price != null && Number.isFinite(Number(price)) ? `$${Number(price).toFixed(2)} USD per call` : 'Price unavailable';
     const credits = data.credits || {};
     const creditCost = data.credit_cost;
-    $('credit-price').textContent = creditCost != null && Number.isFinite(Number(creditCost)) ? `${creditCost} credits` : 'Unavailable';
+    $('credit-price').textContent = creditCost != null && Number.isFinite(Number(creditCost)) ? `${creditCost} ${Number(creditCost) === 1 ? "call" : "calls"}` : 'Unavailable';
     $('credit-detail').textContent = credits.allowed
-      ? `${credits.available ?? credits.balance ?? '—'} available · ${credits.plan || 'eligible subscription'}`
+      ? `Uses 1 call from your plan · ${credits.available ?? credits.balance ?? '—'} calls left · ${credits.plan || 'eligible subscription'}`
       : 'Not available for this account or agent.';
     const escrow = $('pay-escrow'), credit = $('pay-credits');
     escrow.disabled = price == null; credit.disabled = !credits.allowed || creditCost == null || Number(credits.available ?? credits.balance ?? 0) < Number(creditCost);
@@ -97,7 +97,7 @@
     } else $('logs-section').hidden = true;
     if (['delivered', 'completed', 'failed', 'unknown'].includes(state)) {
       loadHistory();
-      if (record.payment_method === 'credits') refreshOptions().catch(e => alert(`Could not refresh credit balance: ${e.message}`, true));
+      if (record.payment_method === 'credits') refreshOptions().catch(e => alert(`Could not refresh call balance: ${e.message}`, true));
     }
     if (advanceStatuses.has(state)) schedulePoll(); else clearTimeout(pollTimer);
   }

@@ -27,7 +27,7 @@ class FakeOneClick:
 
     def tokens(self):
         now = datetime.now(timezone.utc).isoformat()
-        return [{'assetId': 'input', 'decimals': 18, 'blockchain': 'eth', 'symbol': 'INPUT', 'price': 1, 'priceUpdatedAt': now}, {'assetId': 'settlement', 'decimals': 6, 'blockchain': 'near', 'symbol': 'USD', 'price': 1, 'priceUpdatedAt': now}]
+        return [{'assetId': 'input', 'decimals': 18, 'blockchain': 'eth', 'symbol': 'USDC', 'price': 1, 'priceUpdatedAt': now}, {'assetId': 'settlement', 'decimals': 6, 'blockchain': 'near', 'symbol': 'USD', 'price': 1, 'priceUpdatedAt': now}]
 
     def quote(self, payload):
         self.calls.append(copy.deepcopy(payload))

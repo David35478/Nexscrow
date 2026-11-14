@@ -230,3 +230,11 @@ body.app-surface .marketplace-cta .section-kicker{color:rgba(255,255,255,.5)}
 .step-tracker li[aria-current="step"]{opacity:1;font-weight:700;border-color:currentColor}
 .step-tracker li.bad{opacity:1;font-weight:700;border-color:#c0392b;color:#c0392b}
 .empty-cta{display:inline-block;margin-top:8px}
+/* Desktop: one-row nav, menu toggle only on small screens (.btn otherwise forces it visible). */
+body.app-surface .site-header .nav-toggle{display:none!important}
+body.app-surface .site-header .main-nav,body.app-surface .site-header .nav-actions{flex-wrap:nowrap}
+body.app-surface .site-header .nav-actions{margin-left:12px}
+body.app-surface .site-header .user-pill{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Four links fit on phones, so the nav stays visible and wraps instead of collapsing. */
+@media (max-width:760px){body.app-surface .site-header .main-nav{flex-wrap:wrap}}
+body.app-surface .site-header .main-nav a,body.app-surface .site-header .nav-actions .btn{white-space:nowrap}

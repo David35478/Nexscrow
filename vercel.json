@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "crons": [{"path": "/api/cron/settle-due", "schedule": "*/5 * * * *"}],
+  "crons": [{"path": "/api/cron/settle-due", "schedule": "0 0 * * *"}],
   "functions": {
     "main.py": {
       "maxDuration": 60,
